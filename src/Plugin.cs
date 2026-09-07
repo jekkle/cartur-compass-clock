@@ -212,7 +212,17 @@ namespace SkyrimCompass
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(20f, 20f);
-            go.AddComponent<Image>();
+
+            // Icon is its own child so it can scale with distance independently of the label -
+            // scaling the marker root would also stretch the label's size and offset.
+            GameObject iconGo = new GameObject("Icon");
+            iconGo.transform.SetParent(go.transform, false);
+            RectTransform iconRt = iconGo.AddComponent<RectTransform>();
+            iconRt.anchorMin = Vector2.zero;
+            iconRt.anchorMax = Vector2.one;
+            iconRt.offsetMin = Vector2.zero;
+            iconRt.offsetMax = Vector2.zero;
+            iconGo.AddComponent<Image>();
 
             GameObject labelGo = new GameObject("Label");
             labelGo.transform.SetParent(go.transform, false);
@@ -359,7 +369,15 @@ namespace SkyrimCompass
                 float x = relative / halfFov * halfWidth;
                 marker.GetComponent<RectTransform>().anchoredPosition = new Vector2(x, 0f);
 
-                Image icon = marker.GetComponent<Image>();
+                float distance = Mathf.Sqrt(sqrDist);
+                // Current fixed size (20x20) is the far end (distance == range); scale up to
+                // 2x as the pin approaches the player.
+                float closeness = 1f - Mathf.Clamp01(distance / range);
+                float iconScale = Mathf.Lerp(1f, 2f, closeness);
+                Transform iconTransform = marker.transform.Find("Icon");
+                iconTransform.localScale = Vector3.one * iconScale;
+
+                Image icon = iconTransform.GetComponent<Image>();
                 if (icon.sprite != pin.m_icon)
                     icon.sprite = pin.m_icon;
                 icon.enabled = pin.m_icon != null;
@@ -367,7 +385,7 @@ namespace SkyrimCompass
                 Text label = marker.transform.Find("Label").GetComponent<Text>();
                 if (ShowPinNames.Value && !string.IsNullOrEmpty(pin.m_name))
                 {
-                    int dist = Mathf.RoundToInt(Mathf.Sqrt(sqrDist));
+                    int dist = Mathf.RoundToInt(distance);
                     label.text = $"{pin.m_name} ({dist}m)";
                     label.enabled = true;
                 }

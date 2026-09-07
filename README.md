@@ -22,6 +22,10 @@ Pure runtime UI, no Harmony patches:
 - Pins beyond `PinRange` are skipped; markers are pooled (created/destroyed
   as pins enter/exit range, shown/hidden as they enter/exit the FOV window)
   rather than rebuilt from scratch every frame.
+- Each marker's icon is a separate child of the pooled marker (not the same
+  `Image` the whole marker root uses) so it can scale with distance -
+  1x at `PinRange`, 2x at distance 0 - without also stretching the label's
+  size and offset underneath it.
 
 ## Build
 
