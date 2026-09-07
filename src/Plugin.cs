@@ -112,8 +112,23 @@ namespace SkyrimCompass
             _rootRt.sizeDelta = new Vector2(frameW, frameH);
             _rootRt.anchoredPosition = new Vector2(0f, -(ClockTopMargin + ClockHeight + ClockToFrameGap));
 
-            // Content sits strictly inside the frame's carved-out window - measured fractions
-            // of the full frame image, so it lines up with the transparent hole in the overlay.
+            // Frame art sits behind Content - its window is baked-in opaque black (not a cutout),
+            // so the compass content below draws on top of that black backdrop rather than
+            // showing through a transparent hole.
+            GameObject frameGo = new GameObject("FrameArt");
+            frameGo.transform.SetParent(_root.transform, false);
+            RectTransform frameRt = frameGo.AddComponent<RectTransform>();
+            frameRt.anchorMin = Vector2.zero;
+            frameRt.anchorMax = Vector2.one;
+            frameRt.offsetMin = Vector2.zero;
+            frameRt.offsetMax = Vector2.zero;
+            Image frameImg = frameGo.AddComponent<Image>();
+            frameImg.sprite = LoadFrameSprite();
+            frameImg.type = Image.Type.Simple;
+            frameImg.raycastTarget = false;
+
+            // Content sits strictly inside the frame's window - measured fractions of the full
+            // frame image - so ticks/pins/labels land on the frame's own black backdrop.
             GameObject contentGo = new GameObject("Content");
             contentGo.transform.SetParent(_root.transform, false);
             RectTransform contentRt = contentGo.AddComponent<RectTransform>();
@@ -122,9 +137,6 @@ namespace SkyrimCompass
             contentRt.offsetMin = Vector2.zero;
             contentRt.offsetMax = Vector2.zero;
             _contentWidthPx = (WinXMax - WinXMin) * frameW;
-
-            Image bg = contentGo.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.25f);
 
             GameObject viewportGo = new GameObject("Viewport");
             viewportGo.transform.SetParent(contentGo.transform, false);
@@ -170,20 +182,6 @@ namespace SkyrimCompass
             Shadow clockShadow = clockGo.AddComponent<Shadow>();
             clockShadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
             clockShadow.effectDistance = new Vector2(1.5f, -1.5f);
-
-            // Frame overlay on top, alpha-keyed so only the carved wood/metal is opaque -
-            // the window and outer background are transparent, revealing Content behind it.
-            GameObject frameGo = new GameObject("FrameOverlay");
-            frameGo.transform.SetParent(_root.transform, false);
-            RectTransform frameRt = frameGo.AddComponent<RectTransform>();
-            frameRt.anchorMin = Vector2.zero;
-            frameRt.anchorMax = Vector2.one;
-            frameRt.offsetMin = Vector2.zero;
-            frameRt.offsetMax = Vector2.zero;
-            Image frameImg = frameGo.AddComponent<Image>();
-            frameImg.sprite = LoadFrameSprite();
-            frameImg.type = Image.Type.Simple;
-            frameImg.raycastTarget = false;
         }
 
         private GameObject CreateLabel(string text, Color color)

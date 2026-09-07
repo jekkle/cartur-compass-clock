@@ -45,24 +45,17 @@ only scans plugins on startup.
 
 ## Frame art
 
-`Assets/compass_frame.png` is a Norse rune-frame photo, cut out so only the
-carved wood/metal is opaque — both the photo's black backdrop and the
-frame's inner window go fully transparent, letting the compass content
-show through the window and nothing show outside the frame's silhouette.
-The window's position is hardcoded in `Plugin.cs` (`WinXMin/Max`,
-`WinYMin/Max`) as measured fractions of the full frame image.
-
-Cutting the frame out is `tools/FrameCutout.cs` — a flood fill from the
-image border plus a few seed points inside the known window rect, not a
-plain brightness threshold. A per-pixel brightness ramp was the first
-attempt and it looked translucent/ghostly in game: dark carved-wood pixels
-landed in the same brightness range as the window backdrop, so much of the
-wood only ended up ~80% opaque instead of solid. Flood fill fixes that —
-opacity is all-or-nothing based on whether a pixel connects to the
-background, not on how dark it individually is. Run it (see the header
-comment in `tools/FrameCutout.cs` for the exact commands) whenever the
-source frame photo changes; it writes both `compass_frame.rgba` (what the
-mod actually loads) and a refreshed `compass_frame.png` for reference.
+`Assets/compass_frame.png` already ships with correct alpha — only the
+outer silhouette is transparent. The window interior is deliberately left
+as **opaque baked-in black**, not a cutout: `Plugin.cs` layers `FrameArt`
+(the frame image) behind `Content` (ticks/cardinal letters/pin markers), so
+the dynamic compass content draws on top of that black backdrop rather than
+showing through a transparent hole. The window's position is still needed
+to keep `Content` positioned inside it — hardcoded in `Plugin.cs`
+(`WinXMin/Max`, `WinYMin/Max`) as measured fractions of the full frame
+image (a brightness scan, since even though this PNG's alpha is already
+correct, its window/wood boundary still has to be measured to know where
+`Content` goes).
 
 `Texture2D.LoadImage`'s byte[] overload internally needs
 `System.ReadOnlySpan<byte>`, which doesn't cleanly resolve against
@@ -71,11 +64,15 @@ net472 + this game's `netstandard.dll` (`CS0518: Predefined type
 that, the frame ships as `Assets/compass_frame.rgba` — a raw RGBA32 dump
 (8-byte width/height header + bottom-up pixel data) loaded at runtime via
 the old `Texture2D.SetPixels32`, which has no Span overload to trip over.
+When the source PNG already has correct alpha (as this one does), exporting
+it is a direct pixel copy — no flood fill or thresholding needed.
 
-`FrameCutout.Process` takes `blackThreshold`/`whiteThreshold` because source
-photos come with either a black or a white backdrop - pass whichever one
-applies (999 disables the other side) so wood/metal (a mid-brightness warm
-color) never gets caught by either test.
+`tools/FrameCutout.cs` is still here for the case where a *future* source
+photo does need its background removed (a flat-color backdrop with no
+alpha channel of its own) — a flood fill from the image border plus a few
+seed points inside the window rect, using `blackThreshold`/`whiteThreshold`
+depending on whether that photo's backdrop is black or white (999 disables
+the side that doesn't apply). Not used for the current frame art.
 
 ## Sizing
 
