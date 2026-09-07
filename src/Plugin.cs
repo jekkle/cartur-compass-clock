@@ -26,9 +26,15 @@ namespace SkyrimCompass
 
         // Measured from Assets/compass_frame.png: the inner rune-window as a fraction of the
         // full frame image, center-out scan with a 5px-run noise guard (see repo history).
-        private const float WinXMin = 0.1772f, WinXMax = 0.8219f;
-        private const float WinYMin = 0.4171f, WinYMax = 0.5676f;
-        private const float FrameNativeAspect = 1168f / 784f;
+        private const float WinXMin = 0.1123f, WinXMax = 0.8856f;
+        private const float WinYMin = 0.4252f, WinYMax = 0.5392f;
+        private const float FrameNativeAspect = 2448f / 816f;
+
+        // Space reserved above the frame for the clock: gap from screen top to clock top,
+        // clock's own height, then a small gap down to the frame's top edge.
+        private const float ClockTopMargin = 20f;
+        private const float ClockHeight = 40f;
+        private const float ClockToFrameGap = 6f;
 
         private RectTransform _viewport;
         private readonly Dictionary<Minimap.PinData, GameObject> _markerPool = new Dictionary<Minimap.PinData, GameObject>();
@@ -37,6 +43,7 @@ namespace SkyrimCompass
         private GameObject _root;
         private Font _font;
         private float _contentWidthPx;
+        private Text _clockText;
 
         private void Awake()
         {
@@ -98,7 +105,7 @@ namespace SkyrimCompass
             rootRt.anchorMax = new Vector2(0.5f, 1f);
             rootRt.pivot = new Vector2(0.5f, 1f);
             rootRt.sizeDelta = new Vector2(frameW, frameH);
-            rootRt.anchoredPosition = new Vector2(0f, -10f);
+            rootRt.anchoredPosition = new Vector2(0f, -(ClockTopMargin + ClockHeight + ClockToFrameGap));
 
             // Content sits strictly inside the frame's carved-out window - measured fractions
             // of the full frame image, so it lines up with the transparent hole in the overlay.
@@ -139,6 +146,25 @@ namespace SkyrimCompass
             _cardinalE = CreateLabel("E", Color.white);
             _cardinalS = CreateLabel("S", Color.white);
             _cardinalW = CreateLabel("W", Color.white);
+
+            // Clock, centered just above the frame's top edge.
+            GameObject clockGo = new GameObject("Clock");
+            clockGo.transform.SetParent(canvasGo.transform, false);
+            RectTransform clockRt = clockGo.AddComponent<RectTransform>();
+            clockRt.anchorMin = new Vector2(0.5f, 1f);
+            clockRt.anchorMax = new Vector2(0.5f, 1f);
+            clockRt.pivot = new Vector2(0.5f, 1f);
+            clockRt.sizeDelta = new Vector2(200f, ClockHeight);
+            clockRt.anchoredPosition = new Vector2(0f, -ClockTopMargin);
+            _clockText = clockGo.AddComponent<Text>();
+            _clockText.font = _font;
+            _clockText.fontSize = 26;
+            _clockText.fontStyle = FontStyle.Bold;
+            _clockText.alignment = TextAnchor.MiddleCenter;
+            _clockText.color = new Color(1f, 0.9f, 0.65f);
+            Shadow clockShadow = clockGo.AddComponent<Shadow>();
+            clockShadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
+            clockShadow.effectDistance = new Vector2(1.5f, -1.5f);
 
             // Frame overlay on top, alpha-keyed so only the carved wood/metal is opaque -
             // the window and outer background are transparent, revealing Content behind it.
@@ -209,8 +235,17 @@ namespace SkyrimCompass
             GameCamera cam = GameCamera.instance;
             bool active = player != null && cam != null && Minimap.instance != null;
             _root.SetActive(active);
+            _clockText.gameObject.SetActive(active);
             if (!active)
                 return;
+
+            if (EnvMan.instance != null)
+            {
+                // GetDayFraction: 0.0/1.0 = midnight, 0.5 = noon - fraction * 24 is the hour directly.
+                float dayFraction = EnvMan.instance.GetDayFraction();
+                int totalMinutes = (int)(dayFraction * 24f * 60f) % 1440;
+                _clockText.text = $"{totalMinutes / 60:D2}:{totalMinutes % 60:D2}";
+            }
 
             float heading = cam.transform.eulerAngles.y;
             float halfFov = FieldOfView.Value * 0.5f;
