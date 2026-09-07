@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
@@ -16,13 +17,18 @@ namespace SkyrimCompass
 
         public static ConfigEntry<float> PinRange;
         public static ConfigEntry<float> FieldOfView;
-        public static ConfigEntry<int> BarWidth;
-        public static ConfigEntry<int> BarHeight;
+        public static ConfigEntry<int> FrameWidth;
         public static ConfigEntry<bool> ShowPinNames;
 
         // Minimap.m_pins is private - grab it once via reflection instead of patching anything.
         private static readonly FieldInfo PinsField =
             typeof(Minimap).GetField("m_pins", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        // Measured from Assets/compass_frame.png: the inner rune-window as a fraction of the
+        // full frame image, center-out scan with a 5px-run noise guard (see repo history).
+        private const float WinXMin = 0.1772f, WinXMax = 0.8219f;
+        private const float WinYMin = 0.4171f, WinYMax = 0.5676f;
+        private const float FrameNativeAspect = 1168f / 784f;
 
         private RectTransform _viewport;
         private readonly Dictionary<Minimap.PinData, GameObject> _markerPool = new Dictionary<Minimap.PinData, GameObject>();
@@ -30,18 +36,44 @@ namespace SkyrimCompass
         private GameObject _cardinalN, _cardinalE, _cardinalS, _cardinalW;
         private GameObject _root;
         private Font _font;
+        private float _contentWidthPx;
 
         private void Awake()
         {
             PinRange = Config.Bind("General", "PinRange", 300f, "Only show map pins within this many meters.");
-            FieldOfView = Config.Bind("General", "FieldOfView", 90f, "Total degrees of heading visible across the compass bar.");
-            BarWidth = Config.Bind("Layout", "BarWidth", 600, "Compass bar width in pixels.");
-            BarHeight = Config.Bind("Layout", "BarHeight", 36, "Compass bar height in pixels.");
+            FieldOfView = Config.Bind("General", "FieldOfView", 90f, "Total degrees of heading visible across the compass window.");
+            FrameWidth = Config.Bind("Layout", "FrameWidth", 700, "Overall frame width in pixels (height follows the frame image's aspect ratio).");
             ShowPinNames = Config.Bind("General", "ShowPinNames", true, "Show pin name text under each icon.");
 
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             BuildUi();
             Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
+        }
+
+        // Raw RGBA32 (8-byte width/height header + bottom-up pixel data) - see the comment in
+        // the .csproj for why this isn't a PNG decoded via Texture2D.LoadImage.
+        private Sprite LoadFrameSprite()
+        {
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("SkyrimCompass.compass_frame.rgba"))
+            using (BinaryReader reader = new BinaryReader(stream))
+            {
+                int width = reader.ReadInt32();
+                int height = reader.ReadInt32();
+                Color32[] pixels = new Color32[width * height];
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    byte r = reader.ReadByte();
+                    byte g = reader.ReadByte();
+                    byte b = reader.ReadByte();
+                    byte a = reader.ReadByte();
+                    pixels[i] = new Color32(r, g, b, a);
+                }
+
+                Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                tex.SetPixels32(pixels);
+                tex.Apply();
+                return Sprite.Create(tex, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f));
+            }
         }
 
         private void BuildUi()
@@ -56,20 +88,34 @@ namespace SkyrimCompass
             scaler.referenceResolution = new Vector2(1920, 1080);
             canvasGo.AddComponent<GraphicRaycaster>();
 
+            float frameW = FrameWidth.Value;
+            float frameH = frameW / FrameNativeAspect;
+
             _root = new GameObject("CompassRoot");
             _root.transform.SetParent(canvasGo.transform, false);
             RectTransform rootRt = _root.AddComponent<RectTransform>();
             rootRt.anchorMin = new Vector2(0.5f, 1f);
             rootRt.anchorMax = new Vector2(0.5f, 1f);
             rootRt.pivot = new Vector2(0.5f, 1f);
-            rootRt.sizeDelta = new Vector2(BarWidth.Value, BarHeight.Value);
-            rootRt.anchoredPosition = new Vector2(0f, -20f);
+            rootRt.sizeDelta = new Vector2(frameW, frameH);
+            rootRt.anchoredPosition = new Vector2(0f, -10f);
 
-            Image bg = _root.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.35f);
+            // Content sits strictly inside the frame's carved-out window - measured fractions
+            // of the full frame image, so it lines up with the transparent hole in the overlay.
+            GameObject contentGo = new GameObject("Content");
+            contentGo.transform.SetParent(_root.transform, false);
+            RectTransform contentRt = contentGo.AddComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(WinXMin, 1f - WinYMax);
+            contentRt.anchorMax = new Vector2(WinXMax, 1f - WinYMin);
+            contentRt.offsetMin = Vector2.zero;
+            contentRt.offsetMax = Vector2.zero;
+            _contentWidthPx = (WinXMax - WinXMin) * frameW;
+
+            Image bg = contentGo.AddComponent<Image>();
+            bg.color = new Color(0f, 0f, 0f, 0.25f);
 
             GameObject viewportGo = new GameObject("Viewport");
-            viewportGo.transform.SetParent(_root.transform, false);
+            viewportGo.transform.SetParent(contentGo.transform, false);
             _viewport = viewportGo.AddComponent<RectTransform>();
             _viewport.anchorMin = Vector2.zero;
             _viewport.anchorMax = Vector2.one;
@@ -89,10 +135,24 @@ namespace SkyrimCompass
             Image tickImg = centerTick.AddComponent<Image>();
             tickImg.color = new Color(1f, 0.85f, 0.2f, 0.9f);
 
-            _cardinalN = CreateLabel("N", Color.white);
+            _cardinalN = CreateLabel("N", new Color(1f, 0.9f, 0.6f));
             _cardinalE = CreateLabel("E", Color.white);
             _cardinalS = CreateLabel("S", Color.white);
             _cardinalW = CreateLabel("W", Color.white);
+
+            // Frame overlay on top, alpha-keyed so only the carved wood/metal is opaque -
+            // the window and outer background are transparent, revealing Content behind it.
+            GameObject frameGo = new GameObject("FrameOverlay");
+            frameGo.transform.SetParent(_root.transform, false);
+            RectTransform frameRt = frameGo.AddComponent<RectTransform>();
+            frameRt.anchorMin = Vector2.zero;
+            frameRt.anchorMax = Vector2.one;
+            frameRt.offsetMin = Vector2.zero;
+            frameRt.offsetMax = Vector2.zero;
+            Image frameImg = frameGo.AddComponent<Image>();
+            frameImg.sprite = LoadFrameSprite();
+            frameImg.type = Image.Type.Simple;
+            frameImg.raycastTarget = false;
         }
 
         private GameObject CreateLabel(string text, Color color)
@@ -100,10 +160,10 @@ namespace SkyrimCompass
             GameObject go = new GameObject("Cardinal_" + text);
             go.transform.SetParent(_viewport, false);
             RectTransform rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(30f, BarHeight.Value);
+            rt.sizeDelta = new Vector2(30f, 0f);
             Text t = go.AddComponent<Text>();
             t.text = text;
             t.font = _font;
@@ -154,7 +214,7 @@ namespace SkyrimCompass
 
             float heading = cam.transform.eulerAngles.y;
             float halfFov = FieldOfView.Value * 0.5f;
-            float halfWidth = BarWidth.Value * 0.5f;
+            float halfWidth = _contentWidthPx * 0.5f;
 
             PositionOnCompass(_cardinalN, 0f, heading, halfFov, halfWidth);
             PositionOnCompass(_cardinalE, 90f, heading, halfFov, halfWidth);

@@ -18,6 +18,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Raw RGBA32 bytes (8-byte width/height header + bottom-up pixel data), not the PNG -
+      Texture2D.LoadImage's byte[] overload internally requires ReadOnlySpan<byte>, and just
+      referencing that overload set makes the compiler resolve System.ReadOnlySpan`1, which
+      isn't cleanly resolvable against net472 + this game's netstandard.dll (CS0518). Regenerate
+      from Assets/compass_frame.png with the PowerShell snippet in README.md if the source image
+      changes.
+    -->
+    <EmbeddedResource Include="Assets\compass_frame.rgba">
+      <LogicalName>SkyrimCompass.compass_frame.rgba</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="assembly_valheim">
       <HintPath>$(VALHEIM_INSTALL)\valheim_Data\Managed\assembly_valheim.dll</HintPath>
       <Private>false</Private>
