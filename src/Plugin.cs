@@ -48,6 +48,8 @@ namespace SkyrimCompass
         private Text _clockText;
         private HotkeyBar _hotkeyBar;
         private float _hotbarSyncTimer;
+        private string _lastSyncedBarName;
+        private bool _loggedBarInventory;
 
         private void Awake()
         {
@@ -284,8 +286,10 @@ namespace SkyrimCompass
         // mods like EquipmentAndQuickSlots can change the hotbar's slot count/width at runtime.
         private void SyncFrameWidthToHotbar()
         {
-            if (_hotkeyBar == null)
-                _hotkeyBar = FindActiveHotkeyBar();
+            // Re-resolved every tick rather than cached once: which HotkeyBar is the visible one
+            // can't be known at first search (mods create theirs during Hud.Awake), and caching
+            // the wrong one is unrecoverable.
+            _hotkeyBar = FindActiveHotkeyBar();
             if (_hotkeyBar == null)
                 return;
 
@@ -321,27 +325,64 @@ namespace SkyrimCompass
             // with whatever vertical position the bar just got.
             RectTransform clockRt = _clockText.rectTransform;
             clockRt.anchoredPosition = new Vector2(0f, _rootRt.anchoredPosition.y + ClockToFrameGap + ClockHeight);
+
+            // Logged only when the chosen bar changes, so the log shows which HotkeyBar won and
+            // where it actually measured - guessing at this from screenshots alone was painful.
+            if (_lastSyncedBarName != _hotkeyBar.name)
+            {
+                _lastSyncedBarName = _hotkeyBar.name;
+                Logger.LogInfo($"Syncing to HotkeyBar '{_hotkeyBar.name}': screen width {screenWidthPx:F0}px, " +
+                               $"vertical center {hotbarCenterScreenY:F0}px (Screen.height {Screen.height}, " +
+                               $"canvas scaleFactor {_canvas.scaleFactor:F2}) -> frame {frameW:F0}x{frameH:F0} local, " +
+                               $"anchoredPosition.y {_rootRt.anchoredPosition.y:F0}");
+            }
         }
 
-        // EquipmentAndQuickSlots clones the vanilla "HotKeyBar" into a second object named
-        // "QuickSlotsHotkeyBar" and repositions *that* one via its own anchor/position config -
-        // the original vanilla bar stays wherever Hud put it (bottom-center by default), which
-        // with that mod installed is empty/invisible. FindFirstObjectByType<HotkeyBar>() has no
-        // way to know which of the (possibly several) HotkeyBar instances is the one actually on
-        // screen, so prefer the EquipmentAndQuickSlots clone by name when present, and otherwise
-        // fall back to whichever HotkeyBar is actually active in the hierarchy.
-        private static HotkeyBar FindActiveHotkeyBar()
+        // There are several HotkeyBar instances in the scene: the vanilla "HotKeyBar" plus a
+        // clone per quick-slot mod (EquipmentAndQuickSlots makes "QuickSlotsHotkeyBar"). Which
+        // one is actually on screen depends on the user's mod setup, so pick by observable
+        // visibility rather than by name: active in the hierarchy, and actually populated with
+        // slot elements. An empty bar (quick slots disabled/unused) is invisible in game even
+        // though its RectTransform still reports a perfectly good position - matching that one
+        // is what sent the compass to the bottom of the screen.
+        private HotkeyBar FindActiveHotkeyBar()
         {
             HotkeyBar[] all = UnityEngine.Object.FindObjectsByType<HotkeyBar>(FindObjectsSortMode.None);
-            HotkeyBar fallback = null;
+            HotkeyBar best = null;
+            int bestElements = -1;
+
             foreach (HotkeyBar bar in all)
             {
-                if (bar.name == "QuickSlotsHotkeyBar")
-                    return bar;
-                if (fallback == null && bar.gameObject.activeInHierarchy)
-                    fallback = bar;
+                // HotkeyBar.m_elements is private; its slot elements are instantiated as
+                // children of its transform, so counting active children is an equivalent
+                // proxy for "how many slots this bar is actually showing".
+                int elements = 0;
+                for (int i = 0; i < bar.transform.childCount; i++)
+                {
+                    if (bar.transform.GetChild(i).gameObject.activeSelf)
+                        elements++;
+                }
+                bool active = bar.gameObject.activeInHierarchy;
+
+                if (!_loggedBarInventory)
+                {
+                    Vector3[] c = new Vector3[4];
+                    (bar.transform as RectTransform)?.GetWorldCorners(c);
+                    Logger.LogInfo($"HotkeyBar candidate '{bar.name}': active={active}, elements={elements}, " +
+                                   $"screen rect x {c[0].x:F0}..{c[2].x:F0}, y {c[0].y:F0}..{c[1].y:F0}");
+                }
+
+                if (!active)
+                    continue;
+                if (elements > bestElements)
+                {
+                    bestElements = elements;
+                    best = bar;
+                }
             }
-            return fallback;
+
+            _loggedBarInventory = true;
+            return best;
         }
 
         private void PositionOnCompass(GameObject go, float bearing, float heading, float halfFov, float halfWidth)
