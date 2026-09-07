@@ -81,14 +81,28 @@ the side that doesn't apply). Not used for the current frame art.
 ## Sizing
 
 The frame's on-screen width, and the bar's vertical position, both
-auto-match the vanilla hotbar (item slots) every second — via `HotkeyBar`'s
-`RectTransform.GetWorldCorners` compared through this mod's own canvas
-`scaleFactor` — re-checked continuously rather than once, since mods like
-EquipmentAndQuickSlots can change the hotbar's slot count/width at runtime,
-or move it. The bar's vertical *center* is matched to the hotbar's vertical
-center, so the two read as the same HUD row even though the hotbar may be
-left-aligned and the compass is screen-centered horizontally. The clock
-stays glued to the bar's top edge and rides along with wherever that lands.
+auto-match the *visible* hotbar (item slots) every second — via
+`HotkeyBar`'s `RectTransform.GetWorldCorners` compared through this mod's
+own canvas `scaleFactor` — re-checked continuously rather than once, since
+mods like EquipmentAndQuickSlots can change the hotbar's slot count/width
+at runtime, or move it. The bar's vertical *center* is matched to the
+hotbar's vertical center, so the two read as the same HUD row even though
+the hotbar may be left-aligned and the compass is screen-centered
+horizontally. The clock stays glued to the bar's top edge and rides along
+with wherever that lands.
+
+**Picking the right `HotkeyBar`:** EquipmentAndQuickSlots clones the
+vanilla `"HotKeyBar"` GameObject into a second one named
+`"QuickSlotsHotkeyBar"` and repositions *that* one via its own
+anchor/position config (that's the bar actually on screen with it
+installed) — the original vanilla bar is left wherever `Hud` put it
+(bottom-center by default), invisible/empty. `FindFirstObjectByType`
+has no way to know which of the (possibly several) `HotkeyBar` instances
+is the one actually rendered, and grabbing the wrong one sends the compass
+to the bottom of the screen instead of matching the real hotbar.
+`FindActiveHotkeyBar()` prefers a GameObject named `"QuickSlotsHotkeyBar"`
+by name when present, falling back to whichever `HotkeyBar` is actually
+`activeInHierarchy` otherwise (plain vanilla, no EquipmentAndQuickSlots).
 `FrameWidth` in config is only the initial/fallback size used before the
 hotbar is found.
 

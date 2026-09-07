@@ -279,13 +279,13 @@ namespace SkyrimCompass
             UpdatePins(player, heading, halfFov, halfWidth);
         }
 
-        // Keeps the frame the same on-screen width as the vanilla hotbar (item slots 1-9) so the
+        // Keeps the frame the same on-screen width as the visible hotbar (item slots) so the
         // two read as a matched HUD pair. Re-checked once a second rather than every frame since
         // mods like EquipmentAndQuickSlots can change the hotbar's slot count/width at runtime.
         private void SyncFrameWidthToHotbar()
         {
             if (_hotkeyBar == null)
-                _hotkeyBar = UnityEngine.Object.FindFirstObjectByType<HotkeyBar>();
+                _hotkeyBar = FindActiveHotkeyBar();
             if (_hotkeyBar == null)
                 return;
 
@@ -321,6 +321,27 @@ namespace SkyrimCompass
             // with whatever vertical position the bar just got.
             RectTransform clockRt = _clockText.rectTransform;
             clockRt.anchoredPosition = new Vector2(0f, _rootRt.anchoredPosition.y + ClockToFrameGap + ClockHeight);
+        }
+
+        // EquipmentAndQuickSlots clones the vanilla "HotKeyBar" into a second object named
+        // "QuickSlotsHotkeyBar" and repositions *that* one via its own anchor/position config -
+        // the original vanilla bar stays wherever Hud put it (bottom-center by default), which
+        // with that mod installed is empty/invisible. FindFirstObjectByType<HotkeyBar>() has no
+        // way to know which of the (possibly several) HotkeyBar instances is the one actually on
+        // screen, so prefer the EquipmentAndQuickSlots clone by name when present, and otherwise
+        // fall back to whichever HotkeyBar is actually active in the hierarchy.
+        private static HotkeyBar FindActiveHotkeyBar()
+        {
+            HotkeyBar[] all = UnityEngine.Object.FindObjectsByType<HotkeyBar>(FindObjectsSortMode.None);
+            HotkeyBar fallback = null;
+            foreach (HotkeyBar bar in all)
+            {
+                if (bar.name == "QuickSlotsHotkeyBar")
+                    return bar;
+                if (fallback == null && bar.gameObject.activeInHierarchy)
+                    fallback = bar;
+            }
+            return fallback;
         }
 
         private void PositionOnCompass(GameObject go, float bearing, float heading, float halfFov, float halfWidth)
