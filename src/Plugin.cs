@@ -18,6 +18,7 @@ namespace SkyrimCompass
         public static ConfigEntry<float> PinRange;
         public static ConfigEntry<float> FieldOfView;
         public static ConfigEntry<int> FrameWidth;
+        public static ConfigEntry<float> FrameOffsetY;
         public static ConfigEntry<bool> ShowPinNames;
 
         // Minimap.m_pins is private - grab it once via reflection instead of patching anything.
@@ -30,9 +31,7 @@ namespace SkyrimCompass
         private const float WinYMin = 0.3103f, WinYMax = 0.6092f;
         private const float FrameNativeAspect = 2392f / 348f;
 
-        // Space reserved above the frame for the clock: gap from screen top to clock top,
-        // clock's own height, then a small gap down to the frame's top edge.
-        private const float ClockTopMargin = 20f;
+        // The clock sits directly above the frame's top edge, ClockToFrameGap apart.
         private const float ClockHeight = 40f;
         private const float ClockToFrameGap = 0f;
 
@@ -42,20 +41,16 @@ namespace SkyrimCompass
         private GameObject _cardinalN, _cardinalE, _cardinalS, _cardinalW;
         private GameObject _root;
         private RectTransform _rootRt;
-        private Canvas _canvas;
         private Font _font;
         private float _contentWidthPx;
         private Text _clockText;
-        private HotkeyBar _hotkeyBar;
-        private float _hotbarSyncTimer;
-        private string _lastSyncedBarName;
-        private bool _loggedBarInventory;
 
         private void Awake()
         {
             PinRange = Config.Bind("General", "PinRange", 300f, "Only show map pins within this many meters.");
             FieldOfView = Config.Bind("General", "FieldOfView", 90f, "Total degrees of heading visible across the compass window.");
-            FrameWidth = Config.Bind("Layout", "FrameWidth", 700, "Initial/fallback frame width in pixels, used until the vanilla hotbar is found - after that the frame auto-matches the hotbar's on-screen width every second. Height follows the frame image's aspect ratio.");
+            FrameWidth = Config.Bind("Layout", "FrameWidth", 552, "Frame width, in reference-resolution pixels (1920x1080 basis - scales with screen size). Height follows the frame image's aspect ratio.");
+            FrameOffsetY = Config.Bind("Layout", "FrameOffsetY", 36f, "Distance from the top of the screen down to the frame's top edge, in reference-resolution pixels (1920x1080 basis). The clock sits directly above the frame.");
             ShowPinNames = Config.Bind("General", "ShowPinNames", true, "Show pin name text under each icon.");
 
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
@@ -94,7 +89,6 @@ namespace SkyrimCompass
             GameObject canvasGo = new GameObject("SkyrimCompassCanvas");
             DontDestroyOnLoad(canvasGo);
             Canvas canvas = canvasGo.AddComponent<Canvas>();
-            _canvas = canvas;
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 30;
             CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
@@ -112,7 +106,11 @@ namespace SkyrimCompass
             _rootRt.anchorMax = new Vector2(0.5f, 1f);
             _rootRt.pivot = new Vector2(0.5f, 1f);
             _rootRt.sizeDelta = new Vector2(frameW, frameH);
-            _rootRt.anchoredPosition = new Vector2(0f, -(ClockTopMargin + ClockHeight + ClockToFrameGap));
+            // Fixed screen position, deliberately not tied to the hotbar or any other mod's UI:
+            // the CanvasScaler above means these units are relative to a 1920x1080 basis, so the
+            // compass lands in the same relative spot on any resolution, with or without the
+            // mods this was originally tuned against.
+            _rootRt.anchoredPosition = new Vector2(0f, -FrameOffsetY.Value);
 
             // Frame art sits behind Content - its window is baked-in opaque black (not a cutout),
             // so the compass content below draws on top of that black backdrop rather than
@@ -174,7 +172,9 @@ namespace SkyrimCompass
             clockRt.anchorMax = new Vector2(0.5f, 1f);
             clockRt.pivot = new Vector2(0.5f, 1f);
             clockRt.sizeDelta = new Vector2(200f, ClockHeight);
-            clockRt.anchoredPosition = new Vector2(0f, -ClockTopMargin);
+            // Glued to the frame's top edge: the frame's top is at -FrameOffsetY, and the clock
+            // (top pivot) sits its own height above that.
+            clockRt.anchoredPosition = new Vector2(0f, -FrameOffsetY.Value + ClockToFrameGap + ClockHeight);
             _clockText = clockGo.AddComponent<Text>();
             _clockText.font = _font;
             _clockText.fontSize = 26;
@@ -262,13 +262,6 @@ namespace SkyrimCompass
                 _clockText.text = $"{totalMinutes / 60:D2}:{totalMinutes % 60:D2}";
             }
 
-            _hotbarSyncTimer -= Time.deltaTime;
-            if (_hotbarSyncTimer <= 0f)
-            {
-                _hotbarSyncTimer = 1f;
-                SyncFrameWidthToHotbar();
-            }
-
             float heading = cam.transform.eulerAngles.y;
             float halfFov = FieldOfView.Value * 0.5f;
             float halfWidth = _contentWidthPx * 0.5f;
@@ -279,110 +272,6 @@ namespace SkyrimCompass
             PositionOnCompass(_cardinalW, 270f, heading, halfFov, halfWidth);
 
             UpdatePins(player, heading, halfFov, halfWidth);
-        }
-
-        // Keeps the frame the same on-screen width as the visible hotbar (item slots) so the
-        // two read as a matched HUD pair. Re-checked once a second rather than every frame since
-        // mods like EquipmentAndQuickSlots can change the hotbar's slot count/width at runtime.
-        private void SyncFrameWidthToHotbar()
-        {
-            // Re-resolved every tick rather than cached once: which HotkeyBar is the visible one
-            // can't be known at first search (mods create theirs during Hud.Awake), and caching
-            // the wrong one is unrecoverable.
-            _hotkeyBar = FindActiveHotkeyBar();
-            if (_hotkeyBar == null)
-                return;
-
-            RectTransform hotbarRt = _hotkeyBar.transform as RectTransform;
-            if (hotbarRt == null)
-                return;
-
-            // GetWorldCorners on a ScreenSpaceOverlay canvas's RectTransform returns actual
-            // screen-pixel coordinates (origin bottom-left, Y up) regardless of that canvas's
-            // own CanvasScaler settings, so this is a fair comparison even though the hotbar
-            // lives under a different canvas.
-            Vector3[] corners = new Vector3[4];
-            hotbarRt.GetWorldCorners(corners);
-            float screenWidthPx = corners[2].x - corners[1].x;
-            if (screenWidthPx < 10f)
-                return;
-
-            float frameW = screenWidthPx / _canvas.scaleFactor;
-            float frameH = frameW / FrameNativeAspect;
-            _rootRt.sizeDelta = new Vector2(frameW, frameH);
-            _contentWidthPx = (WinXMax - WinXMin) * frameW;
-
-            // Match the bar's vertical center to the hotbar's vertical center, so the two read
-            // as the same HUD row even though one is left-aligned and the other center-aligned.
-            // anchoredPosition.y (top-anchored, pivot top) of an element whose top edge should
-            // land at screen-space Y (bottom-up) `topScreenY` is (topScreenY - Screen.height) /
-            // scaleFactor - derived from: topScreenY = Screen.height + anchoredPosition.y * scaleFactor.
-            float hotbarCenterScreenY = (corners[0].y + corners[1].y) * 0.5f;
-            float rootTopScreenY = hotbarCenterScreenY + (frameH * _canvas.scaleFactor) * 0.5f;
-            _rootRt.anchoredPosition = new Vector2(0f, (rootTopScreenY - Screen.height) / _canvas.scaleFactor);
-
-            // Clock stays glued to the bar's top edge (ClockToFrameGap apart), riding along
-            // with whatever vertical position the bar just got.
-            RectTransform clockRt = _clockText.rectTransform;
-            clockRt.anchoredPosition = new Vector2(0f, _rootRt.anchoredPosition.y + ClockToFrameGap + ClockHeight);
-
-            // Logged only when the chosen bar changes, so the log shows which HotkeyBar won and
-            // where it actually measured - guessing at this from screenshots alone was painful.
-            if (_lastSyncedBarName != _hotkeyBar.name)
-            {
-                _lastSyncedBarName = _hotkeyBar.name;
-                Logger.LogInfo($"Syncing to HotkeyBar '{_hotkeyBar.name}': screen width {screenWidthPx:F0}px, " +
-                               $"vertical center {hotbarCenterScreenY:F0}px (Screen.height {Screen.height}, " +
-                               $"canvas scaleFactor {_canvas.scaleFactor:F2}) -> frame {frameW:F0}x{frameH:F0} local, " +
-                               $"anchoredPosition.y {_rootRt.anchoredPosition.y:F0}");
-            }
-        }
-
-        // There are several HotkeyBar instances in the scene: the vanilla "HotKeyBar" plus a
-        // clone per quick-slot mod (EquipmentAndQuickSlots makes "QuickSlotsHotkeyBar"). Which
-        // one is actually on screen depends on the user's mod setup, so pick by observable
-        // visibility rather than by name: active in the hierarchy, and actually populated with
-        // slot elements. An empty bar (quick slots disabled/unused) is invisible in game even
-        // though its RectTransform still reports a perfectly good position - matching that one
-        // is what sent the compass to the bottom of the screen.
-        private HotkeyBar FindActiveHotkeyBar()
-        {
-            HotkeyBar[] all = UnityEngine.Object.FindObjectsByType<HotkeyBar>(FindObjectsSortMode.None);
-            HotkeyBar best = null;
-            int bestElements = -1;
-
-            foreach (HotkeyBar bar in all)
-            {
-                // HotkeyBar.m_elements is private; its slot elements are instantiated as
-                // children of its transform, so counting active children is an equivalent
-                // proxy for "how many slots this bar is actually showing".
-                int elements = 0;
-                for (int i = 0; i < bar.transform.childCount; i++)
-                {
-                    if (bar.transform.GetChild(i).gameObject.activeSelf)
-                        elements++;
-                }
-                bool active = bar.gameObject.activeInHierarchy;
-
-                if (!_loggedBarInventory)
-                {
-                    Vector3[] c = new Vector3[4];
-                    (bar.transform as RectTransform)?.GetWorldCorners(c);
-                    Logger.LogInfo($"HotkeyBar candidate '{bar.name}': active={active}, elements={elements}, " +
-                                   $"screen rect x {c[0].x:F0}..{c[2].x:F0}, y {c[0].y:F0}..{c[1].y:F0}");
-                }
-
-                if (!active)
-                    continue;
-                if (elements > bestElements)
-                {
-                    bestElements = elements;
-                    best = bar;
-                }
-            }
-
-            _loggedBarInventory = true;
-            return best;
         }
 
         private void PositionOnCompass(GameObject go, float bearing, float heading, float halfFov, float halfWidth)

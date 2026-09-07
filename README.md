@@ -78,33 +78,46 @@ seed points inside the window rect, using `blackThreshold`/`whiteThreshold`
 depending on whether that photo's backdrop is black or white (999 disables
 the side that doesn't apply). Not used for the current frame art.
 
-## Sizing
+## Sizing and position
 
-The frame's on-screen width, and the bar's vertical position, both
-auto-match the *visible* hotbar (item slots) every second — via
-`HotkeyBar`'s `RectTransform.GetWorldCorners` compared through this mod's
-own canvas `scaleFactor` — re-checked continuously rather than once, since
-mods like EquipmentAndQuickSlots can change the hotbar's slot count/width
-at runtime, or move it. The bar's vertical *center* is matched to the
-hotbar's vertical center, so the two read as the same HUD row even though
-the hotbar may be left-aligned and the compass is screen-centered
-horizontally. The clock stays glued to the bar's top edge and rides along
-with wherever that lands.
+Fixed, and deliberately **not** tied to any other UI. `FrameWidth` (552)
+and `FrameOffsetY` (36 from the top of the screen) are in
+reference-resolution pixels against the `CanvasScaler`'s 1920x1080 basis
+with `ScaleWithScreenSize`, so the compass lands in the same relative spot
+at any resolution. Height follows the frame image's aspect ratio, and the
+clock is glued directly above the frame's top edge. Horizontally it's
+screen-centered.
 
-**Picking the right `HotkeyBar`:** EquipmentAndQuickSlots clones the
-vanilla `"HotKeyBar"` GameObject into a second one named
-`"QuickSlotsHotkeyBar"` and repositions *that* one via its own
-anchor/position config (that's the bar actually on screen with it
-installed) — the original vanilla bar is left wherever `Hud` put it
-(bottom-center by default), invisible/empty. `FindFirstObjectByType`
-has no way to know which of the (possibly several) `HotkeyBar` instances
-is the one actually rendered, and grabbing the wrong one sends the compass
-to the bottom of the screen instead of matching the real hotbar.
-`FindActiveHotkeyBar()` prefers a GameObject named `"QuickSlotsHotkeyBar"`
-by name when present, falling back to whichever `HotkeyBar` is actually
-`activeInHierarchy` otherwise (plain vanilla, no EquipmentAndQuickSlots).
-`FrameWidth` in config is only the initial/fallback size used before the
-hotbar is found.
+Those two numbers were measured from a working in-game layout, not guessed.
+
+### Why it isn't tied to the hotbar
+
+An earlier version tried to auto-match the hotbar's on-screen width and
+vertical center via `HotkeyBar`'s `RectTransform.GetWorldCorners`. Don't
+reintroduce that — it was abandoned for two solid reasons:
+
+1. **There is more than one `HotkeyBar`, and no reliable way to tell which
+   is on screen.** EquipmentAndQuickSlots clones the vanilla `"HotKeyBar"`
+   into a second object named `"QuickSlotsHotkeyBar"` and repositions the
+   clone. In practice the *vanilla* bar was the visible one (top-left, slots
+   1-7) while the clone sat unused at the bottom of the screen — but an
+   unused bar still reports a perfectly valid `RectTransform`, so matching
+   the wrong one silently parked the compass at the bottom. Both candidates
+   reported `active=True` and zero populated child elements, so neither name,
+   active state, nor slot count separated them; selection came down to
+   `FindObjectsByType` ordering, i.e. luck.
+2. **It only works for the mod setup it was tuned against.** Anyone without
+   these mods gets a differently-positioned (or differently-numbered)
+   hotbar, so a fixed position is both more predictable and more portable.
+
+Logged measurements from that investigation, for reference (2848x1600
+screen, canvas `scaleFactor` 1.33):
+
+```
+HotkeyBar candidate 'QuickSlotsHotkeyBar': active=True, elements=0, screen y 200..285    <- unused, bottom
+HotkeyBar candidate 'HotKeyBar':           active=True, elements=0, screen y 1456..1541  <- visible, top
+Syncing to 'HotKeyBar': screen width 736px -> frame 552x80 local, anchoredPosition.y -36
+```
 
 ## Config
 
@@ -114,15 +127,21 @@ After first run, edit
 - `PinRange` (float, default 300) — meters. Pins further than this don't show.
 - `FieldOfView` (float, default 90) — total degrees of heading visible
   across the window.
-- `FrameWidth` (int, default 700) — pixels; initial/fallback size only, see
-  Sizing above. Height follows the frame image's aspect ratio automatically.
+- `FrameWidth` (int, default 552) — frame width in reference-resolution
+  pixels (1920x1080 basis). Height follows the image's aspect ratio.
+- `FrameOffsetY` (float, default 36) — distance from the top of the screen
+  down to the frame's top edge, same units. The clock rides above the frame.
 - `ShowPinNames` (bool, default true) — show pin name + distance text under
   each icon; off shows icons only.
 
-## Untested
+Note that BepInEx keeps existing values in an already-generated config file,
+so bumping a default in code does **not** move an installed copy — edit the
+`.cfg` (or delete it to regenerate) when changing layout defaults.
 
-Not yet launch-tested in game. Next step: fully restart Valheim via
-r2modman, confirm the plugin loads (check
+## Status
+
+Launch-tested in game: the bar renders, turns with the camera, pins appear
+at their real bearing and scale with distance, and the clock tracks in-game
+time. Verify a fresh install by checking
 `%APPDATA%\r2modmanPlus-local\Valheim\profiles\Default\BepInEx\LogOutput.log`
-for "SkyrimCompass 1.0.0 loaded."), and verify the bar renders, turns with
-the camera, and pins line up with their real direction.
+for "SkyrimCompass 1.0.0 loaded."
