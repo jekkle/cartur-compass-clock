@@ -45,14 +45,24 @@ only scans plugins on startup.
 
 ## Frame art
 
-`Assets/compass_frame.png` is a Norse rune-frame photo, alpha-keyed so only
-the carved wood/metal is opaque — both the photo's black backdrop and the
-frame's inner window go transparent, letting the compass content show
-through the window and nothing show outside the frame's silhouette. The
-window's position is hardcoded in `Plugin.cs` (`WinXMin/Max`, `WinYMin/Max`)
-as measured fractions of the full frame image, found by scanning outward
-from image center for the wood/metal edge (see git history for the
-PowerShell used).
+`Assets/compass_frame.png` is a Norse rune-frame photo, cut out so only the
+carved wood/metal is opaque — both the photo's black backdrop and the
+frame's inner window go fully transparent, letting the compass content
+show through the window and nothing show outside the frame's silhouette.
+The window's position is hardcoded in `Plugin.cs` (`WinXMin/Max`,
+`WinYMin/Max`) as measured fractions of the full frame image.
+
+Cutting the frame out is `tools/FrameCutout.cs` — a flood fill from the
+image border plus a few seed points inside the known window rect, not a
+plain brightness threshold. A per-pixel brightness ramp was the first
+attempt and it looked translucent/ghostly in game: dark carved-wood pixels
+landed in the same brightness range as the window backdrop, so much of the
+wood only ended up ~80% opaque instead of solid. Flood fill fixes that —
+opacity is all-or-nothing based on whether a pixel connects to the
+background, not on how dark it individually is. Run it (see the header
+comment in `tools/FrameCutout.cs` for the exact commands) whenever the
+source frame photo changes; it writes both `compass_frame.rgba` (what the
+mod actually loads) and a refreshed `compass_frame.png` for reference.
 
 `Texture2D.LoadImage`'s byte[] overload internally needs
 `System.ReadOnlySpan<byte>`, which doesn't cleanly resolve against
@@ -61,28 +71,6 @@ net472 + this game's `netstandard.dll` (`CS0518: Predefined type
 that, the frame ships as `Assets/compass_frame.rgba` — a raw RGBA32 dump
 (8-byte width/height header + bottom-up pixel data) loaded at runtime via
 the old `Texture2D.SetPixels32`, which has no Span overload to trip over.
-
-To regenerate `compass_frame.rgba` after editing `compass_frame.png`:
-
-```powershell
-Add-Type -AssemblyName System.Drawing
-$src = [System.Drawing.Bitmap]::FromFile("D:\Ai\valheim-compass-mod\src\Assets\compass_frame.png")
-$w = $src.Width; $h = $src.Height
-$fs = [System.IO.File]::Create("D:\Ai\valheim-compass-mod\src\Assets\compass_frame.rgba")
-$bw = New-Object System.IO.BinaryWriter($fs)
-$bw.Write([int32]$w); $bw.Write([int32]$h)
-for ($y = $h - 1; $y -ge 0; $y--) {
-    for ($x = 0; $x -lt $w; $x++) {
-        $p = $src.GetPixel($x, $y)
-        $bw.Write([byte]$p.R); $bw.Write([byte]$p.G); $bw.Write([byte]$p.B); $bw.Write([byte]$p.A)
-    }
-}
-$bw.Close(); $fs.Close(); $src.Dispose()
-```
-
-(Note: if re-deriving alpha from a fresh non-transparent source photo, apply
-the brightness-ramp alpha-key first — see git history for the exact
-thresholds used.)
 
 ## Config
 

@@ -34,7 +34,7 @@ namespace SkyrimCompass
         // clock's own height, then a small gap down to the frame's top edge.
         private const float ClockTopMargin = 20f;
         private const float ClockHeight = 40f;
-        private const float ClockToFrameGap = 6f;
+        private const float ClockToFrameGap = 0f;
 
         private RectTransform _viewport;
         private readonly Dictionary<Minimap.PinData, GameObject> _markerPool = new Dictionary<Minimap.PinData, GameObject>();
