@@ -80,12 +80,17 @@ the side that doesn't apply). Not used for the current frame art.
 
 ## Sizing
 
-The frame's on-screen width auto-matches the vanilla hotbar (item slots)
-every second, via `HotkeyBar`'s `RectTransform.GetWorldCorners` compared
-through this mod's own canvas `scaleFactor` — re-checked continuously
-rather than once, since mods like EquipmentAndQuickSlots can change the
-hotbar's slot count/width at runtime. `FrameWidth` in config is only the
-initial/fallback size used before the hotbar is found.
+The frame's on-screen width, and the bar's vertical position, both
+auto-match the vanilla hotbar (item slots) every second — via `HotkeyBar`'s
+`RectTransform.GetWorldCorners` compared through this mod's own canvas
+`scaleFactor` — re-checked continuously rather than once, since mods like
+EquipmentAndQuickSlots can change the hotbar's slot count/width at runtime,
+or move it. The bar's vertical *center* is matched to the hotbar's vertical
+center, so the two read as the same HUD row even though the hotbar may be
+left-aligned and the compass is screen-centered horizontally. The clock
+stays glued to the bar's top edge and rides along with wherever that lands.
+`FrameWidth` in config is only the initial/fallback size used before the
+hotbar is found.
 
 ## Config
 

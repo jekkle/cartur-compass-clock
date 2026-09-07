@@ -294,19 +294,33 @@ namespace SkyrimCompass
                 return;
 
             // GetWorldCorners on a ScreenSpaceOverlay canvas's RectTransform returns actual
-            // screen-pixel coordinates regardless of that canvas's own CanvasScaler settings, so
-            // this is a fair comparison even though the hotbar lives under a different canvas.
+            // screen-pixel coordinates (origin bottom-left, Y up) regardless of that canvas's
+            // own CanvasScaler settings, so this is a fair comparison even though the hotbar
+            // lives under a different canvas.
             Vector3[] corners = new Vector3[4];
             hotbarRt.GetWorldCorners(corners);
             float screenWidthPx = corners[2].x - corners[1].x;
             if (screenWidthPx < 10f)
                 return;
 
-            float ourLocalWidth = screenWidthPx / _canvas.scaleFactor;
-            float frameW = ourLocalWidth;
+            float frameW = screenWidthPx / _canvas.scaleFactor;
             float frameH = frameW / FrameNativeAspect;
             _rootRt.sizeDelta = new Vector2(frameW, frameH);
             _contentWidthPx = (WinXMax - WinXMin) * frameW;
+
+            // Match the bar's vertical center to the hotbar's vertical center, so the two read
+            // as the same HUD row even though one is left-aligned and the other center-aligned.
+            // anchoredPosition.y (top-anchored, pivot top) of an element whose top edge should
+            // land at screen-space Y (bottom-up) `topScreenY` is (topScreenY - Screen.height) /
+            // scaleFactor - derived from: topScreenY = Screen.height + anchoredPosition.y * scaleFactor.
+            float hotbarCenterScreenY = (corners[0].y + corners[1].y) * 0.5f;
+            float rootTopScreenY = hotbarCenterScreenY + (frameH * _canvas.scaleFactor) * 0.5f;
+            _rootRt.anchoredPosition = new Vector2(0f, (rootTopScreenY - Screen.height) / _canvas.scaleFactor);
+
+            // Clock stays glued to the bar's top edge (ClockToFrameGap apart), riding along
+            // with whatever vertical position the bar just got.
+            RectTransform clockRt = _clockText.rectTransform;
+            clockRt.anchoredPosition = new Vector2(0f, _rootRt.anchoredPosition.y + ClockToFrameGap + ClockHeight);
         }
 
         private void PositionOnCompass(GameObject go, float bearing, float heading, float halfFov, float halfWidth)
