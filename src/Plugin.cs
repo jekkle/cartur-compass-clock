@@ -26,9 +26,9 @@ namespace SkyrimCompass
 
         // Measured from Assets/compass_frame.png: the inner rune-window as a fraction of the
         // full frame image, center-out scan with a 5px-run noise guard (see repo history).
-        private const float WinXMin = 0.1123f, WinXMax = 0.8856f;
-        private const float WinYMin = 0.4252f, WinYMax = 0.5392f;
-        private const float FrameNativeAspect = 2448f / 816f;
+        private const float WinXMin = 0.1037f, WinXMax = 0.8946f;
+        private const float WinYMin = 0.3103f, WinYMax = 0.6092f;
+        private const float FrameNativeAspect = 2392f / 348f;
 
         // Space reserved above the frame for the clock: gap from screen top to clock top,
         // clock's own height, then a small gap down to the frame's top edge.
@@ -41,15 +41,19 @@ namespace SkyrimCompass
         private readonly List<Minimap.PinData> _toRemove = new List<Minimap.PinData>();
         private GameObject _cardinalN, _cardinalE, _cardinalS, _cardinalW;
         private GameObject _root;
+        private RectTransform _rootRt;
+        private Canvas _canvas;
         private Font _font;
         private float _contentWidthPx;
         private Text _clockText;
+        private HotkeyBar _hotkeyBar;
+        private float _hotbarSyncTimer;
 
         private void Awake()
         {
             PinRange = Config.Bind("General", "PinRange", 300f, "Only show map pins within this many meters.");
             FieldOfView = Config.Bind("General", "FieldOfView", 90f, "Total degrees of heading visible across the compass window.");
-            FrameWidth = Config.Bind("Layout", "FrameWidth", 700, "Overall frame width in pixels (height follows the frame image's aspect ratio).");
+            FrameWidth = Config.Bind("Layout", "FrameWidth", 700, "Initial/fallback frame width in pixels, used until the vanilla hotbar is found - after that the frame auto-matches the hotbar's on-screen width every second. Height follows the frame image's aspect ratio.");
             ShowPinNames = Config.Bind("General", "ShowPinNames", true, "Show pin name text under each icon.");
 
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
@@ -88,6 +92,7 @@ namespace SkyrimCompass
             GameObject canvasGo = new GameObject("SkyrimCompassCanvas");
             DontDestroyOnLoad(canvasGo);
             Canvas canvas = canvasGo.AddComponent<Canvas>();
+            _canvas = canvas;
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 30;
             CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
@@ -100,12 +105,12 @@ namespace SkyrimCompass
 
             _root = new GameObject("CompassRoot");
             _root.transform.SetParent(canvasGo.transform, false);
-            RectTransform rootRt = _root.AddComponent<RectTransform>();
-            rootRt.anchorMin = new Vector2(0.5f, 1f);
-            rootRt.anchorMax = new Vector2(0.5f, 1f);
-            rootRt.pivot = new Vector2(0.5f, 1f);
-            rootRt.sizeDelta = new Vector2(frameW, frameH);
-            rootRt.anchoredPosition = new Vector2(0f, -(ClockTopMargin + ClockHeight + ClockToFrameGap));
+            _rootRt = _root.AddComponent<RectTransform>();
+            _rootRt.anchorMin = new Vector2(0.5f, 1f);
+            _rootRt.anchorMax = new Vector2(0.5f, 1f);
+            _rootRt.pivot = new Vector2(0.5f, 1f);
+            _rootRt.sizeDelta = new Vector2(frameW, frameH);
+            _rootRt.anchoredPosition = new Vector2(0f, -(ClockTopMargin + ClockHeight + ClockToFrameGap));
 
             // Content sits strictly inside the frame's carved-out window - measured fractions
             // of the full frame image, so it lines up with the transparent hole in the overlay.
@@ -247,6 +252,13 @@ namespace SkyrimCompass
                 _clockText.text = $"{totalMinutes / 60:D2}:{totalMinutes % 60:D2}";
             }
 
+            _hotbarSyncTimer -= Time.deltaTime;
+            if (_hotbarSyncTimer <= 0f)
+            {
+                _hotbarSyncTimer = 1f;
+                SyncFrameWidthToHotbar();
+            }
+
             float heading = cam.transform.eulerAngles.y;
             float halfFov = FieldOfView.Value * 0.5f;
             float halfWidth = _contentWidthPx * 0.5f;
@@ -257,6 +269,36 @@ namespace SkyrimCompass
             PositionOnCompass(_cardinalW, 270f, heading, halfFov, halfWidth);
 
             UpdatePins(player, heading, halfFov, halfWidth);
+        }
+
+        // Keeps the frame the same on-screen width as the vanilla hotbar (item slots 1-9) so the
+        // two read as a matched HUD pair. Re-checked once a second rather than every frame since
+        // mods like EquipmentAndQuickSlots can change the hotbar's slot count/width at runtime.
+        private void SyncFrameWidthToHotbar()
+        {
+            if (_hotkeyBar == null)
+                _hotkeyBar = UnityEngine.Object.FindFirstObjectByType<HotkeyBar>();
+            if (_hotkeyBar == null)
+                return;
+
+            RectTransform hotbarRt = _hotkeyBar.transform as RectTransform;
+            if (hotbarRt == null)
+                return;
+
+            // GetWorldCorners on a ScreenSpaceOverlay canvas's RectTransform returns actual
+            // screen-pixel coordinates regardless of that canvas's own CanvasScaler settings, so
+            // this is a fair comparison even though the hotbar lives under a different canvas.
+            Vector3[] corners = new Vector3[4];
+            hotbarRt.GetWorldCorners(corners);
+            float screenWidthPx = corners[2].x - corners[1].x;
+            if (screenWidthPx < 10f)
+                return;
+
+            float ourLocalWidth = screenWidthPx / _canvas.scaleFactor;
+            float frameW = ourLocalWidth;
+            float frameH = frameW / FrameNativeAspect;
+            _rootRt.sizeDelta = new Vector2(frameW, frameH);
+            _contentWidthPx = (WinXMax - WinXMin) * frameW;
         }
 
         private void PositionOnCompass(GameObject go, float bearing, float heading, float halfFov, float halfWidth)

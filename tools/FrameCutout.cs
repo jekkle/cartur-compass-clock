@@ -30,7 +30,11 @@ using System.IO;
 
 public static class FrameCutout
 {
-    public static void Process(string inPath, string outRgbaPath, string outPngPath, int[] seeds)
+    // blackThreshold: max(R,G,B) below this counts as background (dark backdrop / dark window).
+    // whiteThreshold: min(R,G,B) above this counts as background (white backdrop). Set to 999
+    // to disable one side - e.g. an all-black-backdrop photo only needs blackThreshold.
+    public static void Process(string inPath, string outRgbaPath, string outPngPath, int[] seeds,
+        int blackThreshold = 38, int whiteThreshold = 999)
     {
         Bitmap bmp = new Bitmap(inPath);
         int w = bmp.Width, h = bmp.Height;
@@ -41,48 +45,55 @@ public static class FrameCutout
         bmp.UnlockBits(bd);
 
         byte[] r = new byte[w * h], g = new byte[w * h], b = new byte[w * h];
-        byte[] gray = new byte[w * h];
         for (int y = 0; y < h; y++)
         {
             int row = y * stride;
             for (int x = 0; x < w; x++)
             {
                 int idx = y * w + x;
-                byte bb = raw[row + x * 3];
-                byte gg = raw[row + x * 3 + 1];
-                byte rr = raw[row + x * 3 + 2];
-                r[idx] = rr; g[idx] = gg; b[idx] = bb;
-                gray[idx] = (byte)Math.Max(rr, Math.Max(gg, bb));
+                r[idx] = raw[row + x * 3 + 2];
+                g[idx] = raw[row + x * 3 + 1];
+                b[idx] = raw[row + x * 3];
             }
         }
 
-        // 3x3 box blur on the brightness map so JPEG noise doesn't fragment the flood fill.
-        byte[] blurred = new byte[w * h];
-        for (int y = 0; y < h; y++)
+        // 3x3 box blur per channel so JPEG noise doesn't fragment the flood fill.
+        Func<byte[], byte[]> blur = channel =>
         {
-            for (int x = 0; x < w; x++)
+            byte[] result = new byte[w * h];
+            for (int y = 0; y < h; y++)
             {
-                int sum = 0, cnt = 0;
-                for (int dy = -1; dy <= 1; dy++)
+                for (int x = 0; x < w; x++)
                 {
-                    int yy = y + dy;
-                    if (yy < 0 || yy >= h) continue;
-                    for (int dx = -1; dx <= 1; dx++)
+                    int sum = 0, cnt = 0;
+                    for (int dy = -1; dy <= 1; dy++)
                     {
-                        int xx = x + dx;
-                        if (xx < 0 || xx >= w) continue;
-                        sum += gray[yy * w + xx];
-                        cnt++;
+                        int yy = y + dy;
+                        if (yy < 0 || yy >= h) continue;
+                        for (int dx = -1; dx <= 1; dx++)
+                        {
+                            int xx = x + dx;
+                            if (xx < 0 || xx >= w) continue;
+                            sum += channel[yy * w + xx];
+                            cnt++;
+                        }
                     }
+                    result[y * w + x] = (byte)(sum / cnt);
                 }
-                blurred[y * w + x] = (byte)(sum / cnt);
             }
-        }
+            return result;
+        };
+        byte[] br = blur(r), bg = blur(g), bb = blur(b);
 
-        const int threshold = 38; // calibrated against ZrGoW.jpg: window/backdrop stays under
-                                   // ~40 after blur, real wood starts around ~70+
+        // Background is either near-black (dark backdrop/window) or near-white (light backdrop) -
+        // wood/metal sits in the middle brightness range and satisfies neither.
         bool[] isBg = new bool[w * h];
-        for (int i = 0; i < w * h; i++) isBg[i] = blurred[i] < threshold;
+        for (int i = 0; i < w * h; i++)
+        {
+            int mx = Math.Max(br[i], Math.Max(bg[i], bb[i]));
+            int mn = Math.Min(br[i], Math.Min(bg[i], bb[i]));
+            isBg[i] = (mx < blackThreshold) || (mn > whiteThreshold);
+        }
 
         bool[] visited = new bool[w * h];
         Queue<int> queue = new Queue<int>();

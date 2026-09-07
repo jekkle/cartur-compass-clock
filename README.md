@@ -72,6 +72,20 @@ that, the frame ships as `Assets/compass_frame.rgba` — a raw RGBA32 dump
 (8-byte width/height header + bottom-up pixel data) loaded at runtime via
 the old `Texture2D.SetPixels32`, which has no Span overload to trip over.
 
+`FrameCutout.Process` takes `blackThreshold`/`whiteThreshold` because source
+photos come with either a black or a white backdrop - pass whichever one
+applies (999 disables the other side) so wood/metal (a mid-brightness warm
+color) never gets caught by either test.
+
+## Sizing
+
+The frame's on-screen width auto-matches the vanilla hotbar (item slots)
+every second, via `HotkeyBar`'s `RectTransform.GetWorldCorners` compared
+through this mod's own canvas `scaleFactor` — re-checked continuously
+rather than once, since mods like EquipmentAndQuickSlots can change the
+hotbar's slot count/width at runtime. `FrameWidth` in config is only the
+initial/fallback size used before the hotbar is found.
+
 ## Config
 
 After first run, edit
@@ -80,8 +94,8 @@ After first run, edit
 - `PinRange` (float, default 300) — meters. Pins further than this don't show.
 - `FieldOfView` (float, default 90) — total degrees of heading visible
   across the window.
-- `FrameWidth` (int, default 700) — pixels; height follows the frame image's
-  aspect ratio automatically.
+- `FrameWidth` (int, default 700) — pixels; initial/fallback size only, see
+  Sizing above. Height follows the frame image's aspect ratio automatically.
 - `ShowPinNames` (bool, default true) — show pin name + distance text under
   each icon; off shows icons only.
 
