@@ -1,15 +1,21 @@
-# SkyrimCompass
+# Cartur's Compass and Clock
 
 BepInEx mod for Valheim. Adds a Skyrim-style horizontal compass bar at the
-top of the screen showing facing direction (N/E/S/W) and nearby map pins
-positioned by real-world bearing.
+top of the screen showing facing direction (N/NE/E/... plus a minor tick
+every 15 degrees) and nearby map pins positioned by real-world bearing.
 
 ## How it works
 
 Pure runtime UI, no Harmony patches:
 
 - A `Canvas` (screen-space overlay) with a compass bar is built once in
-  `Plugin.Awake` and kept alive with `DontDestroyOnLoad`.
+  `Plugin.Awake` and kept alive with `DontDestroyOnLoad`. Layout is baked
+  into that hierarchy, so `Config.SettingChanged` queues a full rebuild
+  (destroy the canvas, clear the marker pool, build again) on the next
+  frame — config edits apply live, without a restart.
+- The whole canvas is switched off while the HUD is user-hidden
+  (`Hud.IsUserHidden`), the large map is open (`Minimap.m_mode`), or the
+  inventory or game menu is up (`InventoryGui.IsVisible`, `Menu.IsVisible`).
 - Each frame, `GameCamera.instance.transform.eulerAngles.y` gives the
   player's facing heading. Cardinal letters and pin icons are placed by
   `Mathf.DeltaAngle(heading, bearing)` — the signed angular offset from
@@ -22,10 +28,29 @@ Pure runtime UI, no Harmony patches:
 - Pins beyond `PinRange` are skipped; markers are pooled (created/destroyed
   as pins enter/exit range, shown/hidden as they enter/exit the FOV window)
   rather than rebuilt from scratch every frame.
+- Pins are also skipped when they are checked off on the map (`m_checked`),
+  when they are a Cartur's Map Pins looted-chest pin (that mod's configured
+  looted icon, read from its own config - absent mod, nothing hidden), and
+  when they are within 8m: at that range the XZ bearing is sub-metre wobble
+  swinging through a full circle, so the marker whipped across the compass
+  every frame at max icon scale.
+- Both distance cutoffs get 10% slack on release (`RangeSlack`), so a pin
+  parked exactly on an edge is not destroyed and rebuilt every frame.
 - Each marker's icon is a separate child of the pooled marker (not the same
-  `Image` the whole marker root uses) so it can scale with distance -
-  1x at `PinRange`, 2x at distance 0 - without also stretching the label's
-  size and offset underneath it.
+  `Image` the whole marker root uses) so it can scale and fade with distance
+  - 1x and 45% alpha at `PinRange`, 2x and opaque at distance 0 - without
+  moving the marker root, whose anchored position is what the bearing math
+  writes to.
+- Markers live in their own `Markers` container and are re-sorted by sibling
+  index every frame, farthest first, so the nearest (largest) icon draws on
+  top. Sibling index is only written when it actually changed - reordering
+  dirties the canvas.
+- The `RectMask2D` on the viewport carries a horizontal `softness`, so
+  markers fade out at the window edges instead of being sliced mid-icon.
+- Only one pin name is shown: the pin nearest the center tick, in a label
+  under the frame. It cannot hang off the marker itself - the window is
+  about 24 reference pixels tall, so any text below a marker falls outside
+  the mask and is clipped away entirely.
 
 ## Build
 
@@ -122,7 +147,7 @@ Syncing to 'HotKeyBar': screen width 736px -> frame 552x80 local, anchoredPositi
 ## Config
 
 After first run, edit
-`BepInEx/config/com.jekkle.valheim.skyrimcompass.cfg`:
+`BepInEx/config/com.jekkle.valheim.carturcompassandclock.cfg`:
 
 - `PinRange` (float, default 300) — meters. Pins further than this don't show.
 - `FieldOfView` (float, default 90) — total degrees of heading visible
@@ -131,8 +156,9 @@ After first run, edit
   pixels (1920x1080 basis). Height follows the image's aspect ratio.
 - `FrameOffsetY` (float, default 36) — distance from the top of the screen
   down to the frame's top edge, same units. The clock rides above the frame.
-- `ShowPinNames` (bool, default true) — show pin name + distance text under
-  each icon; off shows icons only.
+- `ShowPinNames` (bool, default true) — show the name and distance of the
+  pin nearest the center of the compass, in a label under the frame; off
+  shows icons only.
 
 Note that BepInEx keeps existing values in an already-generated config file,
 so bumping a default in code does **not** move an installed copy — edit the
@@ -144,4 +170,10 @@ Launch-tested in game: the bar renders, turns with the camera, pins appear
 at their real bearing and scale with distance, and the clock tracks in-game
 time. Verify a fresh install by checking
 `%APPDATA%\r2modmanPlus-local\Valheim\profiles\Default\BepInEx\LogOutput.log`
-for "SkyrimCompass 1.0.0 loaded."
+for "Cartur's Compass and Clock 1.0.0 loaded."
+
+Not yet launch-tested: pin filtering (checked / looted / under 8m), the
+intercardinal letters and minor ticks, distance fade, depth sorting, edge
+softness, the focus label under the frame, HUD/map/inventory hiding, live
+config rebuild, and the day number on the clock. Version stays at 1.0.0
+until those have been seen running.

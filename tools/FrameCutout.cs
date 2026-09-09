@@ -3,7 +3,7 @@
 // border and a handful of seed points inside the known window rect, treating reached pixels as
 // background (alpha 0) and everything else - the frame silhouette itself - as fully opaque
 // (alpha 255), regardless of how dark individual wood/moss pixels are. That "connectivity" test
-// is what SkyrimCompass's earlier brightness-ramp attempt got wrong: dark carved wood pixels
+// is what the compass's earlier brightness-ramp attempt got wrong: dark carved wood pixels
 // landed in the same brightness range as the window backdrop, so a plain per-pixel threshold
 // left the wood only ~80% opaque - a translucent "ghost frame" look over bright sky.
 //

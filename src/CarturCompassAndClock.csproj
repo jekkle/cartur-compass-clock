@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
-    <AssemblyName>SkyrimCompass</AssemblyName>
+    <AssemblyName>CarturCompassAndClock</AssemblyName>
     <Version>1.0.0</Version>
     <LangVersion>latest</LangVersion>
     <RestoreAdditionalProjectSources>https://nuget.bepinex.dev/v3/index.json</RestoreAdditionalProjectSources>
@@ -27,7 +27,7 @@
       changes.
     -->
     <EmbeddedResource Include="Assets\compass_frame.rgba">
-      <LogicalName>SkyrimCompass.compass_frame.rgba</LogicalName>
+      <LogicalName>CarturCompassAndClock.compass_frame.rgba</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 
@@ -67,8 +67,8 @@
     <ItemGroup>
       <DeployFiles Include="$(TargetDir)$(AssemblyName).dll" />
     </ItemGroup>
-    <MakeDir Directories="$(R2MODMAN_PROFILE)\BepInEx\plugins\SkyrimCompass" />
-    <Copy SourceFiles="@(DeployFiles)" DestinationFolder="$(R2MODMAN_PROFILE)\BepInEx\plugins\SkyrimCompass" />
+    <MakeDir Directories="$(R2MODMAN_PROFILE)\BepInEx\plugins\CarturCompassAndClock" />
+    <Copy SourceFiles="@(DeployFiles)" DestinationFolder="$(R2MODMAN_PROFILE)\BepInEx\plugins\CarturCompassAndClock" />
   </Target>
 
 </Project>

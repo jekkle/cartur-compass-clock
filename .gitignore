@@ -2,3 +2,6 @@ bin/
 obj/
 *.user
 tools/*.dll
+dist/
+package/plugins/
+*.zip

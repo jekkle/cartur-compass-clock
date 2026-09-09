@@ -1,0 +1,9 @@
+{
+  "name": "Carturs_Compass_and_Clock",
+  "version_number": "1.0.0",
+  "website_url": "",
+  "description": "A Skyrim-style compass bar across the top of the screen. Shows your heading and your map pins at their real bearing, scaled and faded by distance.",
+  "dependencies": [
+    "denikson-BepInExPack_Valheim-5.4.2333"
+  ]
+}
