@@ -1,5 +1,7 @@
 # Cartur's Compass and Clock
 
+*Free, and always will be — if it improved your game you can [tip me on Patreon](https://www.patreon.com/c/cartur).*
+
 A Skyrim-style compass bar across the top of the screen.
 
 Your heading runs across a carved wooden bar — N, NE, E and the rest, with a
@@ -17,7 +19,11 @@ real bearing, so a pin at your two o'clock appears at your two o'clock.
   name and distance under the bar. No wall of overlapping text.
 - **Stays out of the way.** Hides itself while the big map, your inventory or
   the game menu is open, and when you toggle the HUD off.
-- **Clock.** In-game day and time above the bar.
+- **Clock.** In-game time above the bar, in Valheim's own serif, and it names the
+  part of the day with it - `Dawn 42 - 6:40 AM`, `Dusk 42 - 5:20 PM`,
+  `Night 43 - 12:15 AM`. Night runs 18:00 to 06:00, the same hours the game's own
+  spawns and sleep rules use, so the word tells you whether it is safe out without
+  doing the arithmetic. Dusk is the two hours before dark, as a warning.
 
 ### Pins it deliberately hides
 
@@ -45,8 +51,25 @@ Changes apply live — no restart needed.
 | `PinRange` | 300 | Metres. Pins further out don't show. |
 | `FieldOfView` | 90 | Total degrees of heading visible across the bar. |
 | `ShowPinNames` | true | Name + distance of the centred pin. Off = icons only. |
-| `FrameWidth` | 552 | Bar width, on a 1920x1080 basis. Scales with your resolution. |
-| `FrameOffsetY` | 36 | Gap from the top of the screen down to the bar, same units. |
+| `TwelveHourClock` | true | `1:05 PM`. Off = 24-hour, `13:05`. |
+| `FrameWidth` | 657 | Bar width, on a 1920x1080 basis. Scales with your resolution. |
+| `FrameOffsetX` | 0 | Distance right of screen centre. Negative moves it left, same units. |
+| `FrameOffsetY` | 54 | Gap from the top of the screen down to the bar, same units. |
+| `EditMode` | false | Drag the compass around the screen. See below. |
+
+### Moving and resizing it
+
+Rather than working the numbers out by hand:
+
+1. Turn on `EditMode` in the config manager.
+2. **Open your inventory.** You need a free cursor - without a menu open the mouse
+   is driving the camera, and clicking swings your weapon.
+3. Drag the box to move it. Drag the grip on its right edge to resize it.
+4. Turn `EditMode` back off.
+
+Where you drop it is written straight back to `FrameWidth`, `FrameOffsetX` and
+`FrameOffsetY`, so it survives restarts and you can still fine-tune the numbers by
+hand afterwards.
 
 ## Compatibility
 
@@ -56,3 +79,12 @@ alongside other mods without argument.
 
 Single-player and multiplayer, client-side only. The server does not need it,
 and other players do not need it.
+
+## More from Cartur
+
+- [Cartur's HD Blood](https://thunderstore.io/c/valheim/p/Cartur/Carturs_HD_Blood/) —
+  higher resolution ground blood and a real burst of blood on every hit and kill.
+- [Cartur's Map Pins](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Map_Pins/) —
+  labelled map pins on ore, dungeons, beehives, runestones and boss altars as you find them.
+- [Cartur's Safe Stamina](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Safe_Stamina/) —
+  stamina costs nothing until something hostile is actually near.
