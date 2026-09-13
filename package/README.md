@@ -2,6 +2,10 @@
 
 *Free, and always will be — if it improved your game you can [tip me on Patreon](https://www.patreon.com/c/cartur).*
 
+**More from Cartur:** [HD Blood](https://thunderstore.io/c/valheim/p/Cartur/Carturs_HD_Blood/) ·
+[Map Pins](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Map_Pins/) ·
+[Safe Stamina](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Safe_Stamina/)
+
 A Skyrim-style compass bar across the top of the screen.
 
 Your heading runs across a carved wooden bar — N, NE, E and the rest, with a
@@ -79,12 +83,3 @@ alongside other mods without argument.
 
 Single-player and multiplayer, client-side only. The server does not need it,
 and other players do not need it.
-
-## More from Cartur
-
-- [Cartur's HD Blood](https://thunderstore.io/c/valheim/p/Cartur/Carturs_HD_Blood/) —
-  higher resolution ground blood and a real burst of blood on every hit and kill.
-- [Cartur's Map Pins](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Map_Pins/) —
-  labelled map pins on ore, dungeons, beehives, runestones and boss altars as you find them.
-- [Cartur's Safe Stamina](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Safe_Stamina/) —
-  stamina costs nothing until something hostile is actually near.
