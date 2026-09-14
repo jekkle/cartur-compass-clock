@@ -4,13 +4,18 @@
 
 **More from Cartur:** [HD Blood](https://thunderstore.io/c/valheim/p/Cartur/Carturs_HD_Blood/) ·
 [Map Pins](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Map_Pins/) ·
-[Safe Stamina](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Safe_Stamina/)
+[Safe Stamina](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Safe_Stamina/) ·
+[Follow Command](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Follow_Command/)
 
 A Skyrim-style compass bar across the top of the screen.
 
 Your heading runs across a carved wooden bar — N, NE, E and the rest, with a
 tick every 15° between them — and every map pin within range sits on it at its
 real bearing, so a pin at your two o'clock appears at your two o'clock.
+
+![The bar, the clock and the nearest pin's name](https://raw.githubusercontent.com/jekkle/cartur-compass-clock/master/docs/images/compass-hud.png)
+
+![In game](https://raw.githubusercontent.com/jekkle/cartur-compass-clock/master/docs/images/compass-ingame.png)
 
 ## What it does
 

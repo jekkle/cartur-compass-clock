@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3
+
+- Store page only - the plugin is unchanged from 1.1.2. Added in-game screenshots,
+  a new icon taken from one of them, and a link to Cartur's Follow Command.
+
 ## 1.1.2
 
 - Moved the links to my other mods to the top of the page.
