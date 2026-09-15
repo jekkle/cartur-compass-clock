@@ -706,7 +706,12 @@ namespace CarturCompassAndClock
         /// slack above 1 so a pin sitting on either distance edge is not rebuilt every frame.
         private bool ShouldShow(Minimap.PinData pin, Vector3 playerPos, float range, int lootedType, float slack)
         {
-            if (pin.m_type == Minimap.PinType.None)
+            // Not "type None means hidden" - None is a real type, number 8 of 17, and it is what
+            // the game gives its own discovered-location pins: boss altars, Haldor, Hildir. They
+            // are added to m_pins like any other pin and carry their icon in m_icon rather than
+            // taking one from their type. Rejecting the type dropped every vanilla location pin.
+            // What actually cannot be drawn is a pin with no icon, so test for that instead.
+            if (pin.m_icon == null)
                 return false;
             if (pin.m_checked)
                 return false;                       // ticked off on the map - done with
