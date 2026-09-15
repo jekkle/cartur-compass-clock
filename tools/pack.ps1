@@ -48,3 +48,17 @@ try {
 finally { $archive.Dispose() }
 
 Write-Host "packed $zip"
+
+# Nexus installs by unpacking into the game folder rather than reading a manifest, so its
+# zip is the DLL at its real path and nothing else - no manifest, icon or README, which
+# would land in the Valheim root as loose files.
+$nexus = Join-Path $dist "Carturs_Compass_and_Clock-$version-Nexus.zip"
+if (Test-Path $nexus) { Remove-Item $nexus }
+$archive = [System.IO.Compression.ZipFile]::Open($nexus, "Create")
+try {
+    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $archive, (Join-Path $plugins "CarturCompassAndClock.dll"), "BepInEx/plugins/CarturCompassAndClock.dll") | Out-Null
+}
+finally { $archive.Dispose() }
+
+Write-Host "packed $nexus"

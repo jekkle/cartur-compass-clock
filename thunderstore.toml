@@ -1,0 +1,36 @@
+# Publishing config for the Thunderstore CLI (tcli), used by tools/publish.ps1.
+#
+# Only the listing metadata lives here. pack.ps1 builds the package exactly as before
+# and tcli uploads that zip with `publish --file`, so there is one packer and what
+# ships is the file that was tested.
+#
+# version_number below is never read: with `publish --file` tcli takes the version
+# from the manifest.json inside the zip. package/manifest.json stays the one place a
+# version is edited.
+
+[package]
+namespace = "Cartur"
+name = "Carturs_Compass_and_Clock"
+version_number = "0.0.0"
+description = "A Skyrim-style compass bar across the top of the screen. Shows your heading and your map pins at their real bearing, scaled and faded by distance."
+website_url = "https://github.com/jekkle/cartur-compass-clock"
+contains_nsfw_content = false
+
+[package.dependencies]
+denikson-BepInExPack_Valheim = "5.4.2333"
+
+[build]
+icon = "package/icon.png"
+readme = "package/README.md"
+out_dir = "dist"
+
+[[build.copy]]
+source = "package/plugins"
+target = "plugins"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["valheim"]
+
+[publish.categories]
+valheim = ["ai-generated", "client-side", "utility"]
