@@ -1,10 +1,13 @@
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
+using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace CarturCompassAndClock
@@ -14,23 +17,50 @@ namespace CarturCompassAndClock
     {
         public const string PluginGuid = "com.jekkle.valheim.carturcompassandclock";
         public const string PluginName = "Cartur's Compass and Clock";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.2.0";
 
         public static ConfigEntry<float> PinRange;
         public static ConfigEntry<float> FieldOfView;
         public static ConfigEntry<int> FrameWidth;
+        public static ConfigEntry<float> FrameOffsetX;
         public static ConfigEntry<float> FrameOffsetY;
         public static ConfigEntry<bool> ShowPinNames;
+        public static ConfigEntry<bool> TwelveHourClock;
+        public static ConfigEntry<bool> EditMode;
+
+        // Dragging writes to FrameWidth/FrameOffsetX/FrameOffsetY, and a changed setting rebuilds
+        // the whole canvas - which re-decodes the frame art pixel by pixel in LoadFrameSprite. Once
+        // per drag is fine; once per frame is not. So a drag moves the transforms directly and only
+        // commits to config on release.
+        private const float MinFrameWidth = 200f;
+        private const float MaxFrameWidth = 1600f;
 
         // Cartur's Map Pins repoints a chest pin to a custom "looted" icon once the container is
         // empty; that icon index is its only record of "this chest is cleared out". The compass
-        // cannot see emptiness itself, so it reads that mod's own config entries and rebuilds the
-        // PinType the same way that mod does (custom types start at 100). Soft: absent mod, custom
-        // icons switched off, or moved config keys all leave this at -1 and nothing is hidden.
+        // cannot see emptiness itself, so it reads that mod's own config entry and rebuilds the
+        // PinType the same way that mod does. Soft: absent mod, custom icons switched off, or a
+        // key that has moved again all leave this at -1 and nothing is hidden.
+        //
+        // Map Pins 1.3.0 broke all three halves of that at once, which is why looted chests came
+        // back onto the compass: the key was renamed LootedIconIndex -> LootedIcon, its type went
+        // from int to a PinIcon enum, and the custom types moved - 100 is now where the old 1.2.2
+        // sheet sits, with the current sheet starting above it. Each is read defensively now
+        // rather than assumed.
         private const string MapPinsGuid = "com.jekkle.valheim.carturmappins";
-        private const int MapPinsFirstCustomType = 100;
+
+        // Where the current sheet starts, if that mod cannot be asked. Only a fallback: the real
+        // value is read off its own CustomIcons.CurrentBase, so another sheet does not break this
+        // a second time.
+        private const int MapPinsCurrentBaseFallback = 183;
+        private const int MapPinsLegacyBase = 100;
+
+        // Values this size in the config are a 1.2.2 icon name carried over by that mod, and mean
+        // an index into its old sheet rather than the current one.
+        private const int MapPinsLegacyMarker = 1000;
+
         private ConfigEntry<bool> _mapPinsCustomIcons;
-        private ConfigEntry<int> _mapPinsLootedIcon;
+        private ConfigEntryBase _mapPinsLootedIcon;
+        private int _mapPinsCurrentBase = MapPinsCurrentBaseFallback;
         private bool _mapPinsResolved;
 
         // A pin you are standing on has no meaningful bearing: sub-metre wobble swings atan2
@@ -48,11 +78,18 @@ namespace CarturCompassAndClock
         private static readonly FieldInfo PinsField =
             typeof(Minimap).GetField("m_pins", BindingFlags.NonPublic | BindingFlags.Instance);
 
-        // Measured from Assets/compass_frame.png: the inner rune-window as a fraction of the
-        // full frame image, center-out scan with a 5px-run noise guard (see repo history).
-        private const float WinXMin = 0.1037f, WinXMax = 0.8946f;
-        private const float WinYMin = 0.3103f, WinYMax = 0.6092f;
-        private const float FrameNativeAspect = 2392f / 348f;
+        // Measured from Assets/compass_frame_slim.png: the inner window as a fraction of the full
+        // frame image. Found by per-row and per-column "how much of this line is opaque black"
+        // scans rather than a single centre-out ray - the bar's tick marks poke into the window
+        // from the top edge, and a single ray would stop at the first tick it met. The top bound
+        // is the row where >95% of the width is still black, i.e. below the tick tips, so content
+        // never overlaps them.
+        //
+        // These four go with whichever art the csproj embeds. For the original wide frame
+        // (compass_frame.rgba, 2392x348) they are 0.1037/0.8946, 0.3103/0.6092, aspect 2392/348.
+        private const float WinXMin = 0.0615f, WinXMax = 0.9335f;
+        private const float WinYMin = 0.2101f, WinYMax = 0.8406f;
+        private const float FrameNativeAspect = 2000f / 138f;
 
         // The clock sits directly above the frame's top edge, ClockToFrameGap apart.
         private const float ClockHeight = 40f;
@@ -78,18 +115,83 @@ namespace CarturCompassAndClock
         private readonly List<Transform> _sortedMarkers = new List<Transform>();
         private readonly List<float> _sortedDistances = new List<float>();
         private Font _font;
+
+        // The clock is the one piece of this UI that asks for a real typeface rather than the
+        // built-in Arial, so it is TextMeshPro: Valheim's own fonts are all TMP_FontAssets, and
+        // legacy UI.Text can only take a font the operating system has installed - which would
+        // mean shipping a TTF and hoping, for everyone who installs this.
+        //
+        // Valheim-AveriaSerifLibre is the serif face the game itself uses, already loaded, so
+        // there is nothing to ship. The assets live in resources.assets and their atlases in
+        // StreamingAssets/tmp_fonts; the full set is AveriaSansLibre, AveriaSerifLibre, Norse,
+        // Norsebold, Prstartk and Rune.
+        // Valheim ships no words for the times of day. Its localization CSV - the one the game
+        // itself reads, 13k rows across 37 languages - has $hud_mapday ("Day") and $msg_newday
+        // ("Day $1") and nothing at all for dawn, morning, afternoon, dusk or night, so
+        // Localization has nothing to hand back and these have to come from here.
+        //
+        // The ten languages most Valheim players run, plus English. Anything else falls through
+        // to English, which is what every language got before this existed - so a missing entry
+        // reads as it always did rather than as an empty clock.
+        //
+        // Non-Latin scripts render because Valheim's font assets carry their own TMP fallback
+        // chains: the game has no font-swapping code at all (zero Font-typed fields across
+        // assembly_valheim and assembly_guiutils), yet its own UI draws Chinese and Russian, so
+        // the fallbacks are the only thing that can be doing it. The clock uses a game font and
+        // gets the same treatment.
+        //
+        // Keys are Valheim's own language names, as stored in the "language" pref and as they
+        // head the columns of that CSV.
+        private const int Dawn = 0, Morning = 1, Afternoon = 2, Dusk = 3, Night = 4, Am = 5, Pm = 6;
+
+        private static readonly Dictionary<string, string[]> Phrases = new Dictionary<string, string[]>
+        {
+            { "English",              new[] { "Dawn",         "Morning", "Afternoon",  "Dusk",           "Night", "AM",   "PM"   } },
+            { "German",               new[] { "Morgengrauen", "Morgen",  "Nachmittag", "Abenddämmerung", "Nacht", "AM",   "PM"   } },
+            { "Russian",              new[] { "Рассвет",      "Утро",    "День",       "Сумерки",        "Ночь",  "AM",   "PM"   } },
+            { "French",               new[] { "Aube",         "Matin",   "Après-midi", "Crépuscule",     "Nuit",  "AM",   "PM"   } },
+            { "Spanish",              new[] { "Amanecer",     "Mañana",  "Tarde",      "Anochecer",      "Noche", "a.m.", "p.m." } },
+            { "Italian",              new[] { "Alba",         "Mattino", "Pomeriggio", "Tramonto",       "Notte", "AM",   "PM"   } },
+            { "Polish",               new[] { "Świt",         "Poranek", "Popołudnie", "Zmierzch",       "Noc",   "AM",   "PM"   } },
+            { "Portuguese_Brazilian", new[] { "Amanhecer",    "Manhã",   "Tarde",      "Anoitecer",      "Noite", "AM",   "PM"   } },
+            { "Chinese",              new[] { "黎明",          "早晨",     "下午",        "黄昏",            "夜晚",   "上午",  "下午"  } },
+            { "Japanese",             new[] { "夜明け",         "朝",      "午後",        "夕暮れ",           "夜",    "午前",  "午後"  } },
+            { "Korean",               new[] { "새벽",          "아침",     "오후",        "황혼",            "밤",    "오전",  "오후"  } },
+        };
+
+        // Cleared by Localization.OnLanguageChange and rebuilt on the next frame that needs it -
+        // GetSelectedLanguage is a PlayerPrefs read underneath, which is not a per-frame call.
+        private string[] _phrases;
+
+        private const string ClockFontName = "Valheim-AveriaSerifLibre";
+        private TMP_FontAsset _clockFont;
         private float _contentWidthPx;
-        private Text _clockText;
+        private TextMeshProUGUI _clockText;
         private Text _focusLabel;
         private bool _rebuildQueued;
+
+        // The frame, the clock and the focus label are three siblings under the canvas, each
+        // positioned from FrameOffsetY on its own. A drag applies the same delta to all three
+        // rather than reparenting them under the frame, which would mean rewriting how every one
+        // of them is laid out.
+        private readonly List<RectTransform> _movable = new List<RectTransform>();
+        private RectTransform _frameRoot;
+        private bool _dragging;
 
         private void Awake()
         {
             PinRange = Config.Bind("General", "PinRange", 300f, "Only show map pins within this many meters.");
             FieldOfView = Config.Bind("General", "FieldOfView", 90f, "Total degrees of heading visible across the compass window.");
-            FrameWidth = Config.Bind("Layout", "FrameWidth", 552, "Frame width, in reference-resolution pixels (1920x1080 basis - scales with screen size). Height follows the frame image's aspect ratio.");
-            FrameOffsetY = Config.Bind("Layout", "FrameOffsetY", 36f, "Distance from the top of the screen down to the frame's top edge, in reference-resolution pixels (1920x1080 basis). The clock sits directly above the frame.");
+            // Defaults are the layout arrived at by dragging it around in edit mode, rounded to
+            // whole reference pixels - the fractions a drag leaves behind are well under a screen
+            // pixel and only make the config file look like it was measured with a micrometer.
+            FrameWidth = Config.Bind("Layout", "FrameWidth", 657, "Frame width, in reference-resolution pixels (1920x1080 basis - scales with screen size). Height follows the frame image's aspect ratio.");
+            FrameOffsetX = Config.Bind("Layout", "FrameOffsetX", 0f, "Distance right of screen centre to the middle of the frame, in reference-resolution pixels (1920x1080 basis). Negative moves it left.");
+            FrameOffsetY = Config.Bind("Layout", "FrameOffsetY", 54f, "Distance from the top of the screen down to the frame's top edge, in reference-resolution pixels (1920x1080 basis). The clock sits directly above the frame.");
+            TwelveHourClock = Config.Bind("General", "TwelveHourClock", true,
+                "Show the clock as 12-hour with AM/PM (1:05 PM). Off is 24-hour (13:05).");
             ShowPinNames = Config.Bind("General", "ShowPinNames", true, "Show the name and distance of the pin nearest the center of the compass, under the frame.");
+            EditMode = Config.Bind("Layout", "EditMode", false, "Draw a box around the compass and let you drag it to move it, or drag the grip on its right edge to resize it. The compass stays on screen while this is on, even in menus. Turn it off when you are happy with it.");
 
             // A plugin that throws out of Awake takes the whole chainloader down with it, and
             // every other mod in the profile with it. Nothing here is worth that: if the UI
@@ -110,6 +212,9 @@ namespace CarturCompassAndClock
             // Layout is baked into the hierarchy at build time, so a changed setting only shows up
             // if the whole thing is rebuilt. Deferred to Update - this fires off the config watcher.
             Config.SettingChanged += (sender, args) => _rebuildQueued = true;
+            // Language is switchable from the in-game settings, not just the start menu, so the
+            // cached row has to be dropped when it changes rather than read once at load.
+            Localization.OnLanguageChange += () => _phrases = null;
             Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
         }
 
@@ -168,7 +273,10 @@ namespace CarturCompassAndClock
             // the CanvasScaler above means these units are relative to a 1920x1080 basis, so the
             // compass lands in the same relative spot on any resolution, with or without the
             // mods this was originally tuned against.
-            rootRt.anchoredPosition = new Vector2(0f, -FrameOffsetY.Value);
+            rootRt.anchoredPosition = new Vector2(FrameOffsetX.Value, -FrameOffsetY.Value);
+            _frameRoot = rootRt;
+            _movable.Clear();
+            _movable.Add(rootRt);
 
             // Frame art sits behind Content - its window is baked-in opaque black (not a cutout),
             // so the compass content below draws on top of that black backdrop rather than
@@ -257,12 +365,24 @@ namespace CarturCompassAndClock
             clockRt.sizeDelta = new Vector2(300f, ClockHeight);
             // Glued to the frame's top edge: the frame's top is at -FrameOffsetY, and the clock
             // (top pivot) sits its own height above that.
-            clockRt.anchoredPosition = new Vector2(0f, -FrameOffsetY.Value + ClockToFrameGap + ClockHeight);
-            _clockText = clockGo.AddComponent<Text>();
-            _clockText.font = _font;
+            clockRt.anchoredPosition = new Vector2(FrameOffsetX.Value, -FrameOffsetY.Value + ClockToFrameGap + ClockHeight);
+            _movable.Add(clockRt);
+            // Built switched off, and switched on by ClaimClockFont once it has a real font.
+            // TextMeshProUGUI.Awake calls LoadFontAsset, which - with no font assigned yet -
+            // falls back to TMP_Settings.defaultFontAsset, and Valheim leaves that unset. So it
+            // logs "The LiberationSans SDF Font Asset was not found. There is no Font Asset
+            // assigned to Clock." and returns early, without even a material. The font this
+            // clock wants is not loaded at plugin Awake either (see ClaimClockFont), so there is
+            // nothing to hand it yet. Unity defers Awake on an inactive object, so building it
+            // off means that branch is never reached. Nothing is lost if the font never turns
+            // up: LoadFontAsset's early return leaves the text with no material and it would
+            // have drawn nothing anyway.
+            clockGo.SetActive(false);
+            _clockText = clockGo.AddComponent<TextMeshProUGUI>();
             _clockText.fontSize = 26;
-            _clockText.fontStyle = FontStyle.Bold;
-            _clockText.alignment = TextAnchor.MiddleCenter;
+            _clockText.fontStyle = FontStyles.Bold;
+            _clockText.alignment = TextAlignmentOptions.Center;
+            _clockText.textWrappingMode = TextWrappingModes.NoWrap;
             _clockText.color = new Color(1f, 0.9f, 0.65f);
             Shadow clockShadow = clockGo.AddComponent<Shadow>();
             clockShadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
@@ -279,7 +399,8 @@ namespace CarturCompassAndClock
             focusRt.anchorMax = new Vector2(0.5f, 1f);
             focusRt.pivot = new Vector2(0.5f, 1f);
             focusRt.sizeDelta = new Vector2(500f, 20f);
-            focusRt.anchoredPosition = new Vector2(0f, -(FrameOffsetY.Value + frameH) - 2f);
+            focusRt.anchoredPosition = new Vector2(FrameOffsetX.Value, -(FrameOffsetY.Value + frameH) - 2f);
+            _movable.Add(focusRt);
             _focusLabel = focusGo.AddComponent<Text>();
             _focusLabel.font = _font;
             _focusLabel.fontSize = 14;
@@ -289,6 +410,104 @@ namespace CarturCompassAndClock
             Shadow focusShadow = focusGo.AddComponent<Shadow>();
             focusShadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
             focusShadow.effectDistance = new Vector2(1.5f, -1.5f);
+
+            if (EditMode.Value)
+                BuildEditOverlay(root.transform);
+        }
+
+        /// Only built while EditMode is on. The box is the move handle - all of it, rather than a
+        /// title bar, because the frame is 24 reference pixels tall and a strip of that is not a
+        /// thing anyone can hit. The grip on its right edge resizes. These two are the only
+        /// graphics in the whole UI with raycastTarget left on.
+        private void BuildEditOverlay(Transform parent)
+        {
+            GameObject boxGo = new GameObject("EditBox");
+            boxGo.transform.SetParent(parent, false);
+            RectTransform boxRt = boxGo.AddComponent<RectTransform>();
+            boxRt.anchorMin = Vector2.zero;
+            boxRt.anchorMax = Vector2.one;
+            // Stick out slightly past the frame so the box reads as a box and not as a tint.
+            boxRt.offsetMin = new Vector2(-4f, -4f);
+            boxRt.offsetMax = new Vector2(4f, 4f);
+            Image boxImg = boxGo.AddComponent<Image>();
+            boxImg.color = new Color(1f, 0.85f, 0.2f, 0.15f);
+            boxGo.AddComponent<DragHandle>().Init(this, false);
+
+            GameObject gripGo = new GameObject("ResizeGrip");
+            gripGo.transform.SetParent(boxGo.transform, false);
+            RectTransform gripRt = gripGo.AddComponent<RectTransform>();
+            gripRt.anchorMin = new Vector2(1f, 0.5f);
+            gripRt.anchorMax = new Vector2(1f, 0.5f);
+            gripRt.pivot = new Vector2(0.5f, 0.5f);
+            gripRt.sizeDelta = new Vector2(14f, 14f);
+            gripRt.anchoredPosition = Vector2.zero;
+            Image gripImg = gripGo.AddComponent<Image>();
+            gripImg.color = new Color(1f, 0.85f, 0.2f, 0.9f);
+            gripGo.AddComponent<DragHandle>().Init(this, true);
+        }
+
+        private void MoveBy(Vector2 delta)
+        {
+            foreach (RectTransform rt in _movable)
+                rt.anchoredPosition += delta;
+        }
+
+        /// The grip sits on the right edge, but the frame's pivot is its centre - so the edge only
+        /// travels half as far as the width grows. Doubling the delta makes the edge track the
+        /// cursor, and the compass grows about its own centre rather than crawling sideways.
+        private void ResizeBy(float deltaX)
+        {
+            float width = Mathf.Clamp(_frameRoot.sizeDelta.x + deltaX * 2f, MinFrameWidth, MaxFrameWidth);
+            _frameRoot.sizeDelta = new Vector2(width, width / FrameNativeAspect);
+            // Cached at build time and read every frame by the bearing maths, so it has to keep up
+            // with a live resize or the letters drift out of the window until the next rebuild.
+            _contentWidthPx = (WinXMax - WinXMin) * width;
+        }
+
+        /// Read back off the transforms rather than accumulated during the drag, so whatever the
+        /// clamp in ResizeBy decided is what gets saved. Writing these fires SettingChanged, which
+        /// rebuilds once - the reason a drag does not write config per frame.
+        private void CommitLayout()
+        {
+            FrameOffsetX.Value = _frameRoot.anchoredPosition.x;
+            FrameOffsetY.Value = -_frameRoot.anchoredPosition.y;
+            FrameWidth.Value = Mathf.RoundToInt(_frameRoot.sizeDelta.x);
+        }
+
+        /// Unity's own drag events, so there is no mouse tracking or hit testing here - the
+        /// GraphicRaycaster already on the canvas works out what the cursor is over.
+        private class DragHandle : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+        {
+            private Plugin _owner;
+            private bool _resizes;
+
+            public void Init(Plugin owner, bool resizes)
+            {
+                _owner = owner;
+                _resizes = resizes;
+            }
+
+            public void OnBeginDrag(PointerEventData eventData)
+            {
+                _owner._dragging = true;
+            }
+
+            public void OnDrag(PointerEventData eventData)
+            {
+                // delta is screen pixels; everything in this UI is in 1920x1080 reference units,
+                // and the CanvasScaler's scaleFactor is exactly that conversion.
+                Vector2 delta = eventData.delta / _owner._canvasGo.GetComponent<Canvas>().scaleFactor;
+                if (_resizes)
+                    _owner.ResizeBy(delta.x);
+                else
+                    _owner.MoveBy(delta);
+            }
+
+            public void OnEndDrag(PointerEventData eventData)
+            {
+                _owner._dragging = false;
+                _owner.CommitLayout();
+            }
         }
 
         private void CreateBearingLabel(string text, float bearing, int fontSize, Color color)
@@ -354,21 +573,78 @@ namespace CarturCompassAndClock
             return go;
         }
 
+        // Resources.FindObjectsOfTypeAll only sees objects that are already loaded, and this
+        // plugin's Awake runs before the menu scene has forced the font assets in - so a single
+        // lookup at build time finds nothing and the clock would keep whatever TMP handed it.
+        // Retried from Update instead, twice a second until it lands, then never again. The
+        // clock is built inactive and switched on here, so TMP never wakes up fontless.
+        private float _nextFontTry;
+
+        private void ClaimClockFont()
+        {
+            if (_clockFont != null || _clockText == null || Time.time < _nextFontTry)
+                return;
+
+            _nextFontTry = Time.time + 0.5f;
+            TMP_FontAsset font = SerifFont();
+            if (font == null)
+                return;
+
+            _clockText.font = font;
+            _clockText.gameObject.SetActive(true);
+        }
+
+        private string[] Phrasebook()
+        {
+            if (_phrases == null)
+            {
+                string language = Localization.instance.GetSelectedLanguage();
+                if (language == null || !Phrases.TryGetValue(language, out _phrases))
+                    _phrases = Phrases["English"];
+            }
+
+            return _phrases;
+        }
+
+        private TMP_FontAsset SerifFont()
+        {
+            if (_clockFont == null)
+            {
+                foreach (TMP_FontAsset candidate in Resources.FindObjectsOfTypeAll<TMP_FontAsset>())
+                {
+                    if (candidate != null && candidate.name == ClockFontName)
+                    {
+                        _clockFont = candidate;
+                        break;
+                    }
+                }
+            }
+
+            return _clockFont;
+        }
+
         private void Update()
         {
-            if (_rebuildQueued)
+            // Rebuilding destroys the canvas, which would take the box being dragged with it.
+            if (_rebuildQueued && !_dragging)
             {
                 _rebuildQueued = false;
                 Rebuild();
             }
 
+            ClaimClockFont();
+
             Player player = Player.m_localPlayer;
             GameCamera cam = GameCamera.instance;
-            bool active = player != null && cam != null && Minimap.instance != null
-                          && !Hud.IsUserHidden()                                 // HUD toggled off
-                          && Minimap.instance.m_mode != Minimap.MapMode.Large     // big map open
-                          && !InventoryGui.IsVisible()
-                          && !Menu.IsVisible();
+            bool active = player != null && cam != null && Minimap.instance != null;
+            // While editing, the compass stays up through the inventory and the menu - otherwise
+            // turning the setting on from the config manager makes the thing you are positioning
+            // disappear behind the window you turned it on in.
+            if (active && !EditMode.Value)
+                active = !Hud.IsUserHidden()                                   // HUD toggled off
+                         && Minimap.instance.m_mode != Minimap.MapMode.Large   // big map open
+                         && !InventoryGui.IsVisible()
+                         && !Menu.IsVisible();
             _canvasGo.SetActive(active);
             if (!active)
                 return;
@@ -378,7 +654,17 @@ namespace CarturCompassAndClock
                 // GetDayFraction: 0.0/1.0 = midnight, 0.5 = noon - fraction * 24 is the hour directly.
                 float dayFraction = EnvMan.instance.GetDayFraction();
                 int totalMinutes = (int)(dayFraction * 24f * 60f) % 1440;
-                _clockText.text = $"Day {EnvMan.instance.GetDay()} - {totalMinutes / 60:D2}:{totalMinutes % 60:D2}";
+                int hour = totalMinutes / 60;
+                int minute = totalMinutes % 60;
+
+                // 12-hour wraps both ends: hour 0 reads 12 AM and hour 12 reads 12 PM, which is
+                // what "hour % 12" alone gets wrong in exactly those two cases.
+                string[] words = Phrasebook();
+                string time = TwelveHourClock.Value
+                    ? $"{(hour % 12 == 0 ? 12 : hour % 12)}:{minute:D2} {(hour < 12 ? words[Am] : words[Pm])}"
+                    : $"{hour:D2}:{minute:D2}";
+
+                _clockText.text = $"{PhaseName(dayFraction, words)} {EnvMan.instance.GetDay()} - {time}";
             }
 
             float heading = cam.transform.eulerAngles.y;
@@ -447,17 +733,60 @@ namespace CarturCompassAndClock
                 if (Chainloader.PluginInfos.TryGetValue(MapPinsGuid, out PluginInfo info) && info.Instance != null)
                 {
                     info.Instance.Config.TryGetEntry("CustomIcons", "Enabled", out _mapPinsCustomIcons);
-                    info.Instance.Config.TryGetEntry("Chest", "LootedIconIndex", out _mapPinsLootedIcon);
+
+                    // Through the indexer rather than TryGetEntry<T>: the generic form has to be
+                    // told the type, and being told it wrongly is exactly what broke this. The
+                    // indexer hands back the entry whatever it holds, and BoxedValue reads it
+                    // without this mod ever naming PinIcon.
+                    foreach (string key in new[] { "LootedIcon", "LootedIconIndex" })
+                    {
+                        var definition = new ConfigDefinition("Chest", key);
+                        if (!info.Instance.Config.ContainsKey(definition))
+                            continue;
+                        _mapPinsLootedIcon = info.Instance.Config[definition];
+                        break;
+                    }
+
                     if (_mapPinsLootedIcon == null)
-                        Logger.LogWarning("CarturMapPins is loaded but Chest/LootedIconIndex was not found - looted chests will still show.");
+                        Logger.LogWarning("CarturMapPins is loaded but its looted-chest icon setting was not found - looted chests will still show.");
+
+                    // Its own idea of where the current sheet starts, so a future sheet does not
+                    // silently put this back where it was.
+                    try
+                    {
+                        Type icons = info.Instance.GetType().Assembly.GetType("CarturMapPins.CustomIcons");
+                        FieldInfo baseField = icons?.GetField("CurrentBase",
+                            BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+                        if (baseField != null && baseField.IsLiteral)
+                            _mapPinsCurrentBase = (int)baseField.GetRawConstantValue();
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.LogWarning($"Could not read CarturMapPins.CustomIcons.CurrentBase, assuming {MapPinsCurrentBaseFallback}: {e.Message}");
+                    }
                 }
             }
 
-            if (_mapPinsLootedIcon == null || _mapPinsLootedIcon.Value < 0)
+            if (_mapPinsLootedIcon == null)
                 return -1;
             if (_mapPinsCustomIcons != null && !_mapPinsCustomIcons.Value)
                 return -1;
-            return MapPinsFirstCustomType + _mapPinsLootedIcon.Value;
+
+            int index;
+            try
+            {
+                index = Convert.ToInt32(_mapPinsLootedIcon.BoxedValue);
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
+
+            if (index < 0)
+                return -1;
+            if (index >= MapPinsLegacyMarker)
+                return MapPinsLegacyBase + (index - MapPinsLegacyMarker);
+            return _mapPinsCurrentBase + index;
         }
 
         private void UpdatePins(Player player, float heading, float halfFov, float halfWidth)
@@ -481,7 +810,7 @@ namespace CarturCompassAndClock
 
             _sortedMarkers.Clear();
             _sortedDistances.Clear();
-            string focusName = null;
+            Minimap.PinData focusPin = null;
             float focusDistance = 0f;
             float focusOffAxis = float.MaxValue;
 
@@ -536,7 +865,7 @@ namespace CarturCompassAndClock
                 if (offAxis < focusOffAxis && !string.IsNullOrEmpty(pin.m_name))
                 {
                     focusOffAxis = offAxis;
-                    focusName = pin.m_name;
+                    focusPin = pin;
                     focusDistance = distance;
                 }
             }
@@ -548,10 +877,65 @@ namespace CarturCompassAndClock
                     _sortedMarkers[i].SetSiblingIndex(i);
             }
 
-            bool showName = ShowPinNames.Value && focusName != null;
+            bool showName = ShowPinNames.Value && focusPin != null;
             _focusLabel.enabled = showName;
             if (showName)
-                _focusLabel.text = $"{focusName} ({Mathf.RoundToInt(focusDistance)}m)";
+                _focusLabel.text = $"{PinLabel(focusPin)} ({Mathf.RoundToInt(focusDistance)}m)";
+        }
+
+        // EnvMan defines only three phases of its own - Day (0.25-0.75), Afternoon (0.50-0.75)
+        // and Night - so dawn, morning and dusk are this mod's, and they subdivide the daylight
+        // half only. Night keeps the whole 0.75-0.25 the game's spawn tables and sleep rules run
+        // on, which is what lets the word answer "is it safe out" by itself.
+        //
+        // Night is asked of EnvMan rather than recomputed here so the two can never disagree:
+        // its test is inclusive at both ends (<= 0.25 || >= 0.75) and a reimplementation would
+        // drift at exactly 06:00 and 18:00. IsNight, not IsDaylight - IsDaylight is false in any
+        // m_alwaysDark environment and would read "Night" in the Mistlands at noon.
+        //
+        // Dusk is two hours, not one: at the default day length an in-game hour is about 75 real
+        // seconds, and a warning you can miss by blinking is not a warning.
+        //
+        // The day number still rolls at midnight, since GetDay is time / dayLengthSec - so a night
+        // reads "Night 42" before midnight and "Night 43" after. That is the number the death and
+        // sleep screens show, so it agrees with the rest of the game.
+        private static string PhaseName(float dayFraction, string[] words)
+        {
+            if (EnvMan.IsNight())
+                return words[Night];
+
+            if (dayFraction < 1f / 3f)       // 06:00 - 08:00
+                return words[Dawn];
+            if (dayFraction < 0.5f)          // 08:00 - 12:00
+                return words[Morning];
+            if (dayFraction < 2f / 3f)       // 12:00 - 16:00
+                return words[Afternoon];
+
+            return words[Dusk];              // 16:00 - 18:00
+        }
+
+        // Pin names are stored as raw localization tokens, not display text - a chest pin holds
+        // "$piece_chestwood". The map never shows that because it runs the name through
+        // Localization on its way to the label, and through the UGC filter as well when the pin
+        // came from another player. Minimap.PinData.SetTextAndGameObject:
+        //
+        //     if (!ParentPin.m_author.IsValid || ParentPin.m_author == <local user>)
+        //         PinNameText.text = Localization.instance.Localize(ParentPin.m_name);
+        //     else
+        //         PinNameText.text = CensorShittyWords.FilterUGC(
+        //             Localization.instance.Localize(ParentPin.m_name), UGCType.Text, ParentPin.m_author, 0L);
+        //
+        // Both halves are copied, not just the localization: on a server the nearest pin can be
+        // one somebody else named, and filtering is the game's call to make, not this mod's.
+        private static string PinLabel(Minimap.PinData pin)
+        {
+            string name = Localization.instance.Localize(pin.m_name);
+
+            if (!pin.m_author.IsValid ||
+                pin.m_author == Splatform.PlatformManager.DistributionPlatform.LocalUser.PlatformUserID)
+                return name;
+
+            return CensorShittyWords.FilterUGC(name, UGCType.Text, pin.m_author, 0L);
         }
     }
 }
