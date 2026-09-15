@@ -77,7 +77,11 @@ if (Test-Path $changelogPath) {
     # Everything between this version's "## x.y.z" heading and the next "## " heading.
     $collecting = $false
     $body = @()
-    foreach ($line in Get-Content $changelogPath) {
+    # -Encoding UTF8 is load-bearing: without it Get-Content reads the file as ANSI, so an
+    # em dash comes back as three CP1252 characters. That mojibake then goes out in the JSON
+    # body and Nexus rejects the whole request as malformed - which published the file but
+    # silently lost its changelog.
+    foreach ($line in Get-Content $changelogPath -Encoding UTF8) {
         if ($line -match '^##\s+(.+?)\s*$') {
             if ($collecting) { break }
             $collecting = ($Matches[1] -eq $version)
@@ -160,10 +164,14 @@ Write-Host "published: $($target.name) $version"
 # --- 5. the changelog ------------------------------------------------------------
 # Additive on Nexus's side, so this runs last and only once per version.
 if ($changelog) {
-    Invoke-RestMethod -Method Post -Uri "$api/mods/$modUid/changelogs" -Headers $headers -Body (@{
-        version   = $version
-        changelog = $changelog
-    } | ConvertTo-Json) | Out-Null
+    # Sent as UTF-8 bytes rather than as a string: PowerShell 5.1 does not encode a string
+    # body as UTF-8 by default, so anything outside ASCII arrives corrupted even when the
+    # JSON it was built from was correct.
+    $clJson = @{ version = $version; changelog = $changelog } | ConvertTo-Json
+    Invoke-RestMethod -Method Post -Uri "$api/mods/$modUid/changelogs" `
+        -Headers @{ apikey = $env:NEXUS_API_KEY } `
+        -ContentType "application/json; charset=utf-8" `
+        -Body ([System.Text.Encoding]::UTF8.GetBytes($clJson)) | Out-Null
     Write-Host "changelog: added"
 }
 
