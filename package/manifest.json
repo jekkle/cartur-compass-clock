@@ -1,6 +1,6 @@
 {
   "name": "Carturs_Compass_and_Clock",
-  "version_number": "1.1.3",
+  "version_number": "1.2.0",
   "website_url": "https://github.com/jekkle/cartur-compass-clock",
   "description": "A Skyrim-style compass bar across the top of the screen. Shows your heading and your map pins at their real bearing, scaled and faded by distance.",
   "dependencies": [

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0
+
+- **Emptied chests drop off the compass again.** If you also run Cartur's Map Pins,
+  the compass hides chests you have already cleared out - it reads that mod's
+  looted-chest icon to know which those are. Map Pins 1.3.0 renamed that setting,
+  changed its type and moved where its icons live, so the compass stopped
+  recognising them and looted chests came back. It now reads all three rather than
+  assuming them, and asks Map Pins directly where its icons start, so a future icon
+  set will not break it the same way.
+- Links to Cartur's Flooring.
+
 ## 1.1.3
 
 - Store page only - the plugin is unchanged from 1.1.2. Added in-game screenshots,

@@ -5,7 +5,8 @@
 **More from Cartur:** [HD Blood](https://thunderstore.io/c/valheim/p/Cartur/Carturs_HD_Blood/) ·
 [Map Pins](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Map_Pins/) ·
 [Safe Stamina](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Safe_Stamina/) ·
-[Follow Command](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Follow_Command/)
+[Follow Command](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Follow_Command/) ·
+[Flooring](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Flooring/)
 
 A Skyrim-style compass bar across the top of the screen.
 
