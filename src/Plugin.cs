@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -17,7 +17,7 @@ namespace CarturCompassAndClock
     {
         public const string PluginGuid = "com.jekkle.valheim.carturcompassandclock";
         public const string PluginName = "Cartur's Compass and Clock";
-        public const string PluginVersion = "1.2.0";
+        public const string PluginVersion = "1.2.1";
 
         public static ConfigEntry<float> PinRange;
         public static ConfigEntry<float> FieldOfView;
@@ -325,6 +325,7 @@ namespace CarturCompassAndClock
             tickRt.anchoredPosition = Vector2.zero;
             Image tickImg = centerTick.AddComponent<Image>();
             tickImg.color = new Color(1f, 0.85f, 0.2f, 0.9f);
+            tickImg.raycastTarget = false;
 
             _bearingMarks.Clear();
             _bearingAngles.Clear();
@@ -384,6 +385,7 @@ namespace CarturCompassAndClock
             _clockText.alignment = TextAlignmentOptions.Center;
             _clockText.textWrappingMode = TextWrappingModes.NoWrap;
             _clockText.color = new Color(1f, 0.9f, 0.65f);
+            _clockText.raycastTarget = false;
             Shadow clockShadow = clockGo.AddComponent<Shadow>();
             clockShadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
             clockShadow.effectDistance = new Vector2(1.5f, -1.5f);
@@ -407,6 +409,15 @@ namespace CarturCompassAndClock
             _focusLabel.alignment = TextAnchor.UpperCenter;
             _focusLabel.color = new Color(1f, 0.95f, 0.85f);
             _focusLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            // This canvas has a GraphicRaycaster, and the EventSystem hit-tests every graphic on
+            // it regardless of sortingOrder (30 here - read from the prefabs, the game's own
+            // panels are all 300 and up, so this draws beneath them but still takes pointer
+            // events). Text, TextMeshProUGUI and Image all default raycastTarget to true, so this
+            // label (500x20), the clock (300x40) and the centre tick were swallowing clicks on
+            // whatever game UI sat under them. Nothing in-game gates on the pointer being over
+            // UI - the only IsPointerOverGameObject in assembly_valheim is the start menu's
+            // character spinner - so this only ever cost clicks, never key presses.
+            _focusLabel.raycastTarget = false;
             Shadow focusShadow = focusGo.AddComponent<Shadow>();
             focusShadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
             focusShadow.effectDistance = new Vector2(1.5f, -1.5f);

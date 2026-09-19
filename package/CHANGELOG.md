@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1
+
+- **The compass no longer eats mouse clicks.** Three of its parts - the centre tick, the
+  clock and the name label under the frame - were set to catch clicks, which they have no
+  use for, so anything of the game's sitting behind them could not be clicked. All three
+  now let clicks straight through. Only the edit-mode box and its resize grip catch clicks,
+  which is what they are for.
+
 ## 1.2.0
 
 - **Emptied chests drop off the compass again.** If you also run Cartur's Map Pins,

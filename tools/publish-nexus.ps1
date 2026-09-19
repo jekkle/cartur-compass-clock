@@ -150,13 +150,19 @@ Write-Host "state    : available"
 # --- 4. make it a new version of the main file -----------------------------------
 # update_mod_version and archive_existing_file are the two tick boxes on the form:
 # bump the mod's version to match, and move the previous file to the archive.
+#
+# primary_mod_manager_download is the third, and leaving it out is not neutral: the schema
+# defaults it to false, so the mod-manager download stays pointed at whatever was primary
+# before - which is usually the file this upload just archived. There is no API to change it
+# afterwards; /mod-file-versions/{id} is GET only. It is set here or by hand on the site.
 $created = Invoke-RestMethod -Method Post -Uri "$api/mod-files/$($target.id)/versions" -Headers $headers -Body (@{
-    upload_id             = $uploadId
-    name                  = $target.name
-    version               = $version
-    file_category         = "main"
-    update_mod_version    = $true
-    archive_existing_file = $true
+    upload_id                    = $uploadId
+    name                         = $target.name
+    version                      = $version
+    file_category                = "main"
+    update_mod_version           = $true
+    archive_existing_file        = $true
+    primary_mod_manager_download = $true
 } | ConvertTo-Json)
 
 Write-Host "published: $($target.name) $version"
