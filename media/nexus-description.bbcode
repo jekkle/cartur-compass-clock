@@ -1,0 +1,58 @@
+[size=4][b]A compass bar across the top of the screen, with your map pins on it at their real bearing.[/b][/size]
+
+[list]
+[*]A pin at your two o'clock appears at your two o'clock. Read straight from the in-game map, with the same icons.[/*]
+[*]Icons grow and brighten as you close on them.[/*]
+[*]The pin nearest the centre shows its name and distance. One at a time, not a wall of overlapping text.[/*]
+[*]A clock above the bar names the part of the day - Dawn 42 - 6:40 AM, Night 43 - 12:15 AM - so you know whether it is safe out without doing the arithmetic.[/*]
+[*]Hides itself while the map, your inventory or the game menu is open.[/*]
+[*]Pins you have ticked off do not show, and nor do emptied chests if you also run Cartur's Map Pins.[/*]
+[/list]
+
+[size=4][b]Config[/b][/size]
+
+BepInEx/config/com.jekkle.valheim.carturcompassandclock.cfg, written on first run. Changes apply live - no restart needed.
+
+[list]
+[*][b]PinRange[/b] (300) - metres. Pins further out do not show.[/*]
+[*][b]FieldOfView[/b] (90) - degrees of heading visible across the bar.[/*]
+[*][b]ShowPinNames[/b] (true) - name and distance of the centred pin.[/*]
+[*][b]TwelveHourClock[/b] (true) - 1:05 PM. Off gives 13:05.[/*]
+[*][b]FrameWidth[/b] (657) - bar width, on a 1920x1080 basis. Scales with your resolution.[/*]
+[*][b]FrameOffsetX[/b] (0) - distance right of screen centre. Negative moves it left.[/*]
+[*][b]FrameOffsetY[/b] (54) - gap from the top of the screen down to the bar.[/*]
+[*][b]EditMode[/b] (false) - drag the compass around the screen. See below.[/*]
+[/list]
+
+[size=4][b]Moving and resizing it[/b][/size]
+
+[list=1]
+[*]Turn on EditMode.[/*]
+[*][b]Open your inventory[/b], so you have a free cursor - without a menu open the mouse is driving the camera.[/*]
+[*]Drag the box to move it. Drag the grip on its right edge to resize it.[/*]
+[*]Turn EditMode back off.[/*]
+[/list]
+
+Where you drop it is written straight back to FrameWidth, FrameOffsetX and FrameOffsetY, so it survives restarts and you can still fine-tune the numbers by hand.
+
+[size=4][b]Compatibility[/b][/size]
+
+No Harmony patches - the compass is its own UI canvas that reads the map's pin list. It does not touch the map, the HUD, or anyone else's UI.
+
+Single-player and multiplayer, client-side only. The server does not need it, and other players do not need it.
+
+[size=4][b]Installation[/b][/size]
+
+Requires BepInEx. Unpack into your Valheim folder so the DLL lands in BepInEx/plugins.
+
+[size=4][b]More from Cartur[/b][/size]
+
+[url=https://www.nexusmods.com/valheim/mods/3679]HD Blood[/url] - higher resolution ground blood and a real burst on every hit.
+[url=https://www.nexusmods.com/valheim/mods/3681]Map Pins[/url] - pins the world onto your map as you explore it.
+[url=https://www.nexusmods.com/valheim/mods/3685]Safe Stamina[/url] - stamina costs nothing while no enemy is near.
+[url=https://www.nexusmods.com/valheim/mods/3728]Follow Command[/url] - every tamed animal takes the follow command.
+[url=https://www.nexusmods.com/valheim/mods/3760]Flooring[/url] - floors keep the rain off, and fires sit on them.
+[url=https://www.nexusmods.com/valheim/mods/3779]UI - HUD[/url] - a hand-drawn bronze HUD you can arrange in game.
+[url=https://www.nexusmods.com/valheim/mods/3888]Waste Management[/url] - a trash can and a sort button in the inventory.
+
+Free, and always will be - if it improved your game you can [url=https://www.patreon.com/c/cartur]tip me on Patreon[/url].

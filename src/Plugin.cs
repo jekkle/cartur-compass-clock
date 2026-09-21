@@ -5,6 +5,7 @@ using System.Reflection;
 using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
+using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -17,7 +18,7 @@ namespace CarturCompassAndClock
     {
         public const string PluginGuid = "com.jekkle.valheim.carturcompassandclock";
         public const string PluginName = "Cartur's Compass and Clock";
-        public const string PluginVersion = "1.2.1";
+        public const string PluginVersion = "1.3.0";
 
         public static ConfigEntry<float> PinRange;
         public static ConfigEntry<float> FieldOfView;
@@ -58,6 +59,24 @@ namespace CarturCompassAndClock
         // an index into its old sheet rather than the current one.
         private const int MapPinsLegacyMarker = 1000;
 
+        // Cartur's Map Pins paints each pin its own colour on the map, and the compass drew every
+        // icon white. Its rule, from that mod's Minimap patch:
+        //
+        //     PinStyles.Style style = PinStyles.For(pin.m_pos);
+        //     Color? colour = PinStyles.ColourFor(style);
+        //     if (colour != null) icon.color = colour.Value;
+        //     else if (PinStyles.TintFor(pin.m_type, out Color tint)) icon.color = tint;
+        //
+        // so a per-pin style wins, and an ore-type tint is the fallback. PinStyles is an internal
+        // static class, hence reflection rather than a reference - and the same soft rule as the
+        // looted-chest lookup: absent mod, moved member, or a throw leaves pins white.
+        private static MethodInfo _pinStylesFor;
+        private static MethodInfo _pinStylesColourFor;
+        private static MethodInfo _pinStylesTintFor;
+        private static bool _pinStylesResolved;
+        private static readonly object[] OneArg = new object[1];
+        private static readonly object[] TintArgs = new object[2];
+
         private ConfigEntry<bool> _mapPinsCustomIcons;
         private ConfigEntryBase _mapPinsLootedIcon;
         private int _mapPinsCurrentBase = MapPinsCurrentBaseFallback;
@@ -68,6 +87,72 @@ namespace CarturCompassAndClock
         // scale, since it is also the closest - and collides with every other marker near the
         // centre. Inside this radius the pin is just "here", so it is not drawn at all.
         private const float MinBearingDistance = 8f;
+
+        // The home pin. Minimap.UpdateProfilePins builds it from the claimed bed:
+        //
+        //     if (playerProfile.HaveCustomSpawnPoint()) {
+        //         if (m_spawnPointPin == null)
+        //             m_spawnPointPin = AddPin(playerProfile.GetCustomSpawnPoint(),
+        //                                      PinType.Bed, "", false, false, 0L, default);
+        //         m_spawnPointPin.m_pos = playerProfile.GetCustomSpawnPoint();
+        //     }
+        //
+        // So it sits in m_pins like any other pin, is the only Bed-typed pin the game makes, and
+        // carries an empty m_name - which is why the focus label needs a word of its own for it.
+        // PinType.Bed is 5, read off Minimap/PinType in assembly_valheim.
+        private const int HomePinType = 5;
+
+        // The death marker. Player.OnDeath:
+        //
+        //     Minimap.instance.AddPin(transform.position, PinType.Death,
+        //                             string.Format("$hud_mapday {0}", EnvMan.instance.GetDay(...)),
+        //                             true, false, 0L, default);
+        //
+        // save:true, and one is added per death - the game keeps no single "current grave" slot
+        // (Minimap.m_deathPin is created nowhere and only ever removed). So every grave not yet
+        // ticked off on the map is drawn. PinType.Death is 4, read off Minimap/PinType.
+        private const int DeathPinType = 4;
+
+        // Graves whose tombstone has been emptied. The pin itself is kept as the key rather than
+        // a position, so a grave that drifts - tombstones in water float - cannot be matched to
+        // the wrong pin later. This mod does not touch the map: the pin stays there, the compass
+        // just stops drawing it. That also means the set is per-session, and an old grave emptied
+        // before this build has no record at all, so its pin keeps showing.
+        private static readonly HashSet<Minimap.PinData> LootedGraves = new HashSet<Minimap.PinData>();
+
+        // A tombstone is spawned at the death position but can float away from it before being
+        // looted, so its pin is found by nearest-within-this, not by an exact position match.
+        private const float GravePinMatchRange = 40f;
+
+        // TombStone.m_container and TombStone.GetOwner are both private, and both are read once
+        // per despawn tick on a grave standing next to you - cached, not looked up per call.
+        private static readonly FieldInfo TombStoneContainer =
+            typeof(TombStone).GetField("m_container", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly MethodInfo TombStoneGetOwner =
+            typeof(TombStone).GetMethod("GetOwner", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        // Home and graves are exempt from the range cut, drawn in their own colour at a fixed
+        // size, and sorted to the top of the marker stack: the whole point of either is the trip
+        // back from somewhere you have never been. Distance fading is deliberately not applied -
+        // at 3km the normal curve would leave a 20px icon at 45% alpha, i.e. invisible exactly
+        // when it is the only pin that matters.
+        private static readonly Color HomeColor = new Color(1f, 0.82f, 0.25f, 1f);
+        private static readonly Color DeathColor = new Color(0.75f, 0.13f, 0.13f, 1f);
+        private const float PriorityIconScale = 1.5f;
+
+        // The label under the frame names the pin nearest the centre. "Nearest the centre" used to
+        // mean anywhere inside the half-FOV - 45 degrees by default - so a pin well off to one
+        // side kept its name on screen long after it stopped being what you were looking at, and
+        // home and graves made it worse by never being range-filtered out of the running. Only
+        // pins inside this cone can take the label, so turning away from one clears it.
+        private const float FocusConeDegrees = 12f;
+
+        // Declutter. Two markers closer together than this - in reference-resolution pixels, the
+        // same units as the frame width - are a pile, not two readable icons, and a dense pin
+        // field turns the whole bar into one smear. Nearest wins the spot and the ones behind it
+        // are dropped for that frame. Widening the frame or narrowing the FOV spreads the same
+        // pins further apart, so a fixed pixel gap needs no config of its own.
+        private const float MarkerMinSpacing = 22f;
 
         // Both distance cutoffs are hard edges, and a pin parked on one would have its marker
         // destroyed and rebuilt every single frame. Markers are only released once the pin is
@@ -114,6 +199,10 @@ namespace CarturCompassAndClock
         // Parallel lists, rebuilt each frame, holding this frame's markers farthest-first.
         private readonly List<Transform> _sortedMarkers = new List<Transform>();
         private readonly List<float> _sortedDistances = new List<float>();
+        // X positions kept by this frame's declutter pass.
+        private readonly List<float> _keptX = new List<float>();
+        // This frame's home and grave markers - never decluttered away, always drawn on top.
+        private readonly List<Transform> _priorityMarkers = new List<Transform>();
         private Font _font;
 
         // The clock is the one piece of this UI that asks for a real typeface rather than the
@@ -142,22 +231,28 @@ namespace CarturCompassAndClock
         //
         // Keys are Valheim's own language names, as stored in the "language" pref and as they
         // head the columns of that CSV.
-        private const int Dawn = 0, Morning = 1, Afternoon = 2, Dusk = 3, Night = 4, Am = 5, Pm = 6;
+        // Three phases, not five. Dawn and Dusk were narrow bands read off EnvMan's day fraction,
+        // and the clock beside them already says the hour - so they cost a word each and told you
+        // nothing the number did not. DayFormat carries the whole "Day 106" phrase rather than the
+        // bare word, because the number does not sit in the same place in every language.
+        private const int Morning = 0, Afternoon = 1, Night = 2, DayFormat = 3, Am = 4, Pm = 5, Home = 6;
 
         private static readonly Dictionary<string, string[]> Phrases = new Dictionary<string, string[]>
         {
-            { "English",              new[] { "Dawn",         "Morning", "Afternoon",  "Dusk",           "Night", "AM",   "PM"   } },
-            { "German",               new[] { "Morgengrauen", "Morgen",  "Nachmittag", "Abenddämmerung", "Nacht", "AM",   "PM"   } },
-            { "Russian",              new[] { "Рассвет",      "Утро",    "День",       "Сумерки",        "Ночь",  "AM",   "PM"   } },
-            { "French",               new[] { "Aube",         "Matin",   "Après-midi", "Crépuscule",     "Nuit",  "AM",   "PM"   } },
-            { "Spanish",              new[] { "Amanecer",     "Mañana",  "Tarde",      "Anochecer",      "Noche", "a.m.", "p.m." } },
-            { "Italian",              new[] { "Alba",         "Mattino", "Pomeriggio", "Tramonto",       "Notte", "AM",   "PM"   } },
-            { "Polish",               new[] { "Świt",         "Poranek", "Popołudnie", "Zmierzch",       "Noc",   "AM",   "PM"   } },
-            { "Portuguese_Brazilian", new[] { "Amanhecer",    "Manhã",   "Tarde",      "Anoitecer",      "Noite", "AM",   "PM"   } },
-            { "Chinese",              new[] { "黎明",          "早晨",     "下午",        "黄昏",            "夜晚",   "上午",  "下午"  } },
-            { "Japanese",             new[] { "夜明け",         "朝",      "午後",        "夕暮れ",           "夜",    "午前",  "午後"  } },
-            { "Korean",               new[] { "새벽",          "아침",     "오후",        "황혼",            "밤",    "오전",  "오후"  } },
+            //                            Morning       Afternoon     Night     Day format    AM      PM      Home
+            { "English",              new[] { "Morning",   "Afternoon",  "Night",  "Day {0}",    "AM",   "PM",   "Home" } },
+            { "German",               new[] { "Morgen",    "Nachmittag", "Nacht",  "Tag {0}",    "AM",   "PM",   "Zuhause" } },
+            { "Russian",              new[] { "Утро",      "День",       "Ночь",   "День {0}",   "AM",   "PM",   "Дом" } },
+            { "French",               new[] { "Matin",     "Après-midi", "Nuit",   "Jour {0}",   "AM",   "PM",   "Maison" } },
+            { "Spanish",              new[] { "Mañana",    "Tarde",      "Noche",  "Día {0}",    "a.m.", "p.m.", "Hogar" } },
+            { "Italian",              new[] { "Mattino",   "Pomeriggio", "Notte",  "Giorno {0}", "AM",   "PM",   "Casa" } },
+            { "Polish",               new[] { "Poranek",   "Popołudnie", "Noc",    "Dzień {0}",  "AM",   "PM",   "Dom" } },
+            { "Portuguese_Brazilian", new[] { "Manhã",     "Tarde",      "Noite",  "Dia {0}",    "AM",   "PM",   "Casa" } },
+            { "Chinese",              new[] { "早晨",       "下午",        "夜晚",    "第{0}天",     "上午",  "下午",  "家" } },
+            { "Japanese",             new[] { "朝",         "午後",        "夜",     "{0}日目",     "午前",  "午後",  "拠点" } },
+            { "Korean",               new[] { "아침",        "오후",        "밤",     "{0}일차",     "오전",  "오후",  "집" } },
         };
+
 
         // Cleared by Localization.OnLanguageChange and rebuilt on the next frame that needs it -
         // GetSelectedLanguage is a PlayerPrefs read underneath, which is not a per-frame call.
@@ -209,13 +304,25 @@ namespace CarturCompassAndClock
                 return;
             }
 
+            // The only patch in the mod: a grave's pin should stop being drawn once the grave
+            // is empty, and nothing else reports that. A failure here costs the grave rule and
+            // nothing else, so it must not take the compass - or the chainloader - down with it.
+            try
+            {
+                new Harmony(PluginGuid).PatchAll(typeof(GraveLootedPatch));
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning($"Could not patch TombStone.UpdateDespawn - recovered graves will keep their marker: {e.Message}");
+            }
+
             // Layout is baked into the hierarchy at build time, so a changed setting only shows up
             // if the whole thing is rebuilt. Deferred to Update - this fires off the config watcher.
             Config.SettingChanged += (sender, args) => _rebuildQueued = true;
             // Language is switchable from the in-game settings, not just the start menu, so the
             // cached row has to be dropped when it changes rather than read once at load.
             Localization.OnLanguageChange += () => _phrases = null;
-            Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
+            Logger.LogInfo($"{PluginName} {PluginVersion} loaded - compass built, TombStone.UpdateDespawn patched for recovered graves.");
         }
 
         // Raw RGBA32 (8-byte width/height header + bottom-up pixel data) - see the comment in
@@ -675,7 +782,8 @@ namespace CarturCompassAndClock
                     ? $"{(hour % 12 == 0 ? 12 : hour % 12)}:{minute:D2} {(hour < 12 ? words[Am] : words[Pm])}"
                     : $"{hour:D2}:{minute:D2}";
 
-                _clockText.text = $"{PhaseName(dayFraction, words)} {EnvMan.instance.GetDay()} - {time}";
+                string day = string.Format(words[DayFormat], EnvMan.instance.GetDay());
+                _clockText.text = $"{PhaseName(hour, words)}, {day} - {time}";
             }
 
             float heading = cam.transform.eulerAngles.y;
@@ -728,15 +836,33 @@ namespace CarturCompassAndClock
                 return false;                       // ticked off on the map - done with
             if (lootedType >= 0 && (int)pin.m_type == lootedType)
                 return false;                       // emptied chest
+            if (LootedGraves.Contains(pin))
+                return false;                       // grave already recovered
 
             Vector3 offset = pin.m_pos - playerPos;
             float far = range * slack;
-            if (offset.sqrMagnitude > far * far)
+            if (!IsPriority(pin) && offset.sqrMagnitude > far * far)
                 return false;
             // Bearing is an XZ angle, so the "you are standing on it" test has to be XZ too -
             // a pin straight down a dungeon shaft is close in 3D but still has a real bearing.
             float near = MinBearingDistance / slack;
             return offset.x * offset.x + offset.z * offset.z > near * near;
+        }
+
+        private static bool IsHome(Minimap.PinData pin)
+        {
+            return (int)pin.m_type == HomePinType;
+        }
+
+        private static bool IsDeath(Minimap.PinData pin)
+        {
+            return (int)pin.m_type == DeathPinType;
+        }
+
+        /// Home and graves: shown at any distance, never crowded out, drawn over everything else.
+        private static bool IsPriority(Minimap.PinData pin)
+        {
+            return IsHome(pin) || IsDeath(pin);
         }
 
         /// -1 when there is nothing to hide. Read through the cached ConfigEntry rather than a
@@ -805,6 +931,60 @@ namespace CarturCompassAndClock
             return _mapPinsCurrentBase + index;
         }
 
+        /// The colour Cartur's Map Pins would draw this pin in, or null for "leave it white".
+        private Color? PinColour(Minimap.PinData pin)
+        {
+            if (!_pinStylesResolved)
+            {
+                _pinStylesResolved = true;
+                try
+                {
+                    if (Chainloader.PluginInfos.TryGetValue(MapPinsGuid, out PluginInfo info) && info.Instance != null)
+                    {
+                        Type styles = info.Instance.GetType().Assembly.GetType("CarturMapPins.PinStyles");
+                        _pinStylesFor = styles?.GetMethod("For", BindingFlags.Public | BindingFlags.Static);
+                        _pinStylesColourFor = styles?.GetMethod("ColourFor", BindingFlags.Public | BindingFlags.Static);
+                        _pinStylesTintFor = styles?.GetMethod("TintFor", BindingFlags.Public | BindingFlags.Static);
+
+                        if (_pinStylesFor == null || _pinStylesColourFor == null)
+                            Logger.LogWarning("CarturMapPins is loaded but PinStyles.For/ColourFor were not found - compass pins stay white.");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.LogWarning($"Could not read CarturMapPins pin colours, compass pins stay white: {e.Message}");
+                }
+            }
+
+            if (_pinStylesFor == null || _pinStylesColourFor == null)
+                return null;
+
+            try
+            {
+                OneArg[0] = pin.m_pos;
+                object style = _pinStylesFor.Invoke(null, OneArg);
+
+                OneArg[0] = style;
+                if (_pinStylesColourFor.Invoke(null, OneArg) is Color styled)
+                    return styled;
+
+                if (_pinStylesTintFor != null)
+                {
+                    TintArgs[0] = pin.m_type;
+                    TintArgs[1] = null;
+                    if (_pinStylesTintFor.Invoke(null, TintArgs) is bool tinted && tinted && TintArgs[1] is Color tint)
+                        return tint;
+                }
+            }
+            catch (Exception)
+            {
+                // One bad frame is not worth spamming the log or dropping the compass.
+                _pinStylesFor = null;
+            }
+
+            return null;
+        }
+
         private void UpdatePins(Player player, float heading, float halfFov, float halfWidth)
         {
             List<Minimap.PinData> pins = (List<Minimap.PinData>)PinsField.GetValue(Minimap.instance);
@@ -829,6 +1009,7 @@ namespace CarturCompassAndClock
             Minimap.PinData focusPin = null;
             float focusDistance = 0f;
             float focusOffAxis = float.MaxValue;
+            _priorityMarkers.Clear();
 
             foreach (Minimap.PinData pin in pins)
             {
@@ -837,6 +1018,7 @@ namespace CarturCompassAndClock
 
                 Vector3 offset = pin.m_pos - playerPos;
                 float distance = offset.magnitude;
+                bool isPriority = IsPriority(pin);
 
                 if (!_markerPool.TryGetValue(pin, out GameObject marker))
                 {
@@ -847,10 +1029,13 @@ namespace CarturCompassAndClock
                 // Farthest first, so the nearest marker - the biggest, and the one worth reading -
                 // ends up last in the sibling list and draws on top of the rest. Markers that fail
                 // the FOV test below are ordered too, to keep sibling order stable frame to frame.
+                // Home and graves sort as distance zero, so they land at the end of the list
+                // whatever their real distance and end up over every other marker.
+                float sortKey = isPriority ? 0f : distance;
                 int at = _sortedDistances.Count;
-                while (at > 0 && _sortedDistances[at - 1] < distance)
+                while (at > 0 && _sortedDistances[at - 1] < sortKey)
                     at--;
-                _sortedDistances.Insert(at, distance);
+                _sortedDistances.Insert(at, sortKey);
                 _sortedMarkers.Insert(at, marker.transform);
 
                 float bearing = Mathf.Atan2(offset.x, offset.z) * Mathf.Rad2Deg;
@@ -864,27 +1049,47 @@ namespace CarturCompassAndClock
                 marker.SetActive(true);
                 float x = relative / halfFov * halfWidth;
                 marker.GetComponent<RectTransform>().anchoredPosition = new Vector2(x, 0f);
+                if (isPriority)
+                    _priorityMarkers.Add(marker.transform);
 
                 // Base size (20x20) is the far end (distance == range); scale up to 2x and fade
                 // back up to full opacity as the pin approaches, so depth reads at a glance.
                 float closeness = 1f - Mathf.Clamp01(distance / range);
                 Transform iconTransform = marker.transform.Find("Icon");
-                iconTransform.localScale = Vector3.one * Mathf.Lerp(1f, 2f, closeness);
+                iconTransform.localScale = Vector3.one *
+                    (isPriority ? PriorityIconScale : Mathf.Lerp(1f, 2f, closeness));
 
                 Image icon = iconTransform.GetComponent<Image>();
                 if (icon.sprite != pin.m_icon)
                     icon.sprite = pin.m_icon;
                 icon.enabled = pin.m_icon != null;
-                icon.color = new Color(1f, 1f, 1f, Mathf.Lerp(0.45f, 1f, closeness));
+                // Home and graves keep their own colours - the whole point of them is that they
+                // read at a glance. Everything else takes the colour it has on the map, with the
+                // compass's distance fade folded into whatever alpha that colour carries.
+                if (isPriority)
+                {
+                    icon.color = IsHome(pin) ? HomeColor : DeathColor;
+                }
+                else
+                {
+                    Color tint = PinColour(pin) ?? Color.white;
+                    tint.a *= Mathf.Lerp(0.45f, 1f, closeness);
+                    icon.color = tint;
+                }
 
+                // Home has no name of its own, so it would never win the label under the
+                // name test alone - and it is the one pin always worth naming.
                 float offAxis = Mathf.Abs(relative);
-                if (offAxis < focusOffAxis && !string.IsNullOrEmpty(pin.m_name))
+                if (offAxis <= FocusConeDegrees && offAxis < focusOffAxis &&
+                    (isPriority || !string.IsNullOrEmpty(pin.m_name)))
                 {
                     focusOffAxis = offAxis;
                     focusPin = pin;
                     focusDistance = distance;
                 }
             }
+
+            Declutter();
 
             for (int i = 0; i < _sortedMarkers.Count; i++)
             {
@@ -896,7 +1101,14 @@ namespace CarturCompassAndClock
             bool showName = ShowPinNames.Value && focusPin != null;
             _focusLabel.enabled = showName;
             if (showName)
-                _focusLabel.text = $"{PinLabel(focusPin)} ({Mathf.RoundToInt(focusDistance)}m)";
+            {
+                // Empty only reaches here for home - graves carry "$hud_mapday {0}", and every
+                // other pin needs a name to be picked at all.
+                string label = PinLabel(focusPin);
+                if (string.IsNullOrEmpty(label))
+                    label = Phrasebook()[Home];
+                _focusLabel.text = $"{label} ({Mathf.RoundToInt(focusDistance)}m)";
+            }
         }
 
         // EnvMan defines only three phases of its own - Day (0.25-0.75), Afternoon (0.50-0.75)
@@ -915,19 +1127,114 @@ namespace CarturCompassAndClock
         // The day number still rolls at midnight, since GetDay is time / dayLengthSec - so a night
         // reads "Night 42" before midnight and "Night 43" after. That is the number the death and
         // sleep screens show, so it agrees with the rest of the game.
-        private static string PhaseName(float dayFraction, string[] words)
+        /// Off the clock's own hour, not EnvMan.IsNight(): the game's night runs on its own
+        /// schedule and would disagree with the number displayed right beside it.
+        private static string PhaseName(int hour, string[] words)
         {
-            if (EnvMan.IsNight())
-                return words[Night];
-
-            if (dayFraction < 1f / 3f)       // 06:00 - 08:00
-                return words[Dawn];
-            if (dayFraction < 0.5f)          // 08:00 - 12:00
+            if (hour >= 6 && hour < 12)
                 return words[Morning];
-            if (dayFraction < 2f / 3f)       // 12:00 - 16:00
+            if (hour >= 12 && hour < 18)
                 return words[Afternoon];
 
-            return words[Dusk];              // 16:00 - 18:00
+            return words[Night];             // 18:00 - 06:00
+        }
+
+        /// A hundred pins in a 90-degree window do not become a hundred readable icons - they
+        /// become one smear across the bar, and the useful ones are under it. So only one marker
+        /// is kept per MarkerMinSpacing of bar: walking _sortedMarkers backwards is nearest-first
+        /// (it is built farthest-first for draw order), so the nearest pin claims the spot and
+        /// the ones behind it are hidden for this frame. Nothing is filtered by range or type,
+        /// and a marker hidden here comes straight back as soon as the view is less crowded.
+        private void Declutter()
+        {
+            _keptX.Clear();
+
+            // Home and graves claim their spots first, so they are never the ones crowded out.
+            for (int i = 0; i < _priorityMarkers.Count; i++)
+            {
+                if (_priorityMarkers[i].gameObject.activeSelf)
+                    _keptX.Add(((RectTransform)_priorityMarkers[i]).anchoredPosition.x);
+            }
+
+            for (int i = _sortedMarkers.Count - 1; i >= 0; i--)
+            {
+                Transform marker = _sortedMarkers[i];
+                if (!marker.gameObject.activeSelf || _priorityMarkers.Contains(marker))
+                    continue;
+
+                float x = ((RectTransform)marker).anchoredPosition.x;
+                bool crowded = false;
+                for (int k = 0; k < _keptX.Count; k++)
+                {
+                    if (Mathf.Abs(_keptX[k] - x) < MarkerMinSpacing)
+                    {
+                        crowded = true;
+                        break;
+                    }
+                }
+
+                if (crowded)
+                    marker.gameObject.SetActive(false);
+                else
+                    _keptX.Add(x);
+            }
+        }
+
+        /// A grave's contents cannot be read at range: the tombstone is a ZDO in a zone nobody
+        /// has loaded, so a client 2km away has nothing to ask. What it can see is the moment the
+        /// grave empties, because emptying one means standing on it. TombStone.UpdateDespawn:
+        ///
+        ///     if (!m_container.IsInUse() && m_container.GetInventory().NrOfItems() <= 0) {
+        ///         GiveBoost();
+        ///         m_removeEffect.Create(...);
+        ///         m_nview.Destroy();
+        ///     }
+        ///
+        /// so an empty grave deletes itself. The same condition is re-tested here rather than
+        /// inferred from the destroy, and the owner is checked as well - on a server somebody
+        /// else's grave can be emptied a few metres from where you died, and that must not clear
+        /// your marker.
+        [HarmonyPatch(typeof(TombStone), "UpdateDespawn")]
+        private static class GraveLootedPatch
+        {
+            private static void Postfix(TombStone __instance)
+            {
+                if (TombStoneContainer == null || TombStoneGetOwner == null || PinsField == null)
+                    return;
+                if (Player.m_localPlayer == null || Minimap.instance == null)
+                    return;
+
+                var container = TombStoneContainer.GetValue(__instance) as Container;
+                if (container == null || container.IsInUse())
+                    return;
+
+                Inventory inventory = container.GetInventory();
+                if (inventory == null || inventory.NrOfItems() > 0)
+                    return;
+
+                if (!(TombStoneGetOwner.Invoke(__instance, null) is long owner) ||
+                    owner != Player.m_localPlayer.GetPlayerID())
+                    return;
+
+                Vector3 gravePos = __instance.transform.position;
+                var pins = (List<Minimap.PinData>)PinsField.GetValue(Minimap.instance);
+                Minimap.PinData nearest = null;
+                float nearestDistance = GravePinMatchRange;
+
+                foreach (Minimap.PinData pin in pins)
+                {
+                    if (!IsDeath(pin))
+                        continue;
+                    float distance = Vector3.Distance(pin.m_pos, gravePos);
+                    if (distance > nearestDistance)
+                        continue;
+                    nearestDistance = distance;
+                    nearest = pin;
+                }
+
+                if (nearest != null)
+                    LootedGraves.Add(nearest);
+            }
         }
 
         // Pin names are stored as raw localization tokens, not display text - a chest pin holds

@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.3.0
+
+- **Home is always on the compass, in gold.** The bed you last slept in shows at any
+  distance, at a fixed size, and does not fade out - the whole point of a home marker is
+  the walk back from somewhere you have never been. The name under the frame reads "Home".
+- **Graves show in dark red, at any distance, over everything else.** A grave whose
+  tombstone you have emptied stops being drawn, so only the ones still holding your gear
+  stay on the bar. That lasts for the session; the pin itself is left alone on the map.
+- **A crowded bar stays readable.** When several pins land on the same stretch of the
+  compass, the nearest one keeps the spot and the ones behind it are hidden until the view
+  thins out. Nothing is filtered by distance or by type, and home and graves are never the
+  ones dropped.
+- **Pins take their colour from Cartur's Map Pins.** A pin you have coloured on the map is
+  drawn in that colour on the compass, ore tints included. Without that mod, or with a pin
+  left at its default style, nothing changes.
+- **The clock says what time of day it is, and names the day.** Three phases now - Morning
+  06:00-12:00, Afternoon 12:00-18:00, Night 18:00-06:00 - and the day number is labelled, so
+  it reads "Morning, Day 106 - 9:14 AM" instead of "Night 106". Dawn and Dusk are gone: they
+  were narrow bands that told you nothing the clock beside them did not. Translated into the
+  same eleven languages as the rest of the clock.
+- **The name under the frame clears when you turn away.** It only names a pin within 12
+  degrees of centre now, instead of anywhere in the visible arc.
+
 ## 1.2.1
 
 - **The compass no longer eats mouse clicks.** Three of its parts - the centre tick, the
