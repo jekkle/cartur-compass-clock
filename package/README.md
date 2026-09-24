@@ -10,9 +10,9 @@ A compass bar across the top of the screen, with your map pins on it at their re
   in-game map, with the same icons.
 - Icons grow and brighten as you close on them.
 - The pin nearest the centre shows its name and distance. One at a time.
-- A clock above the bar names the part of the day — `Dawn 42 - 6:40 AM`,
-  `Night 43 - 12:15 AM` — so you know whether it is safe out without doing the
-  arithmetic.
+- A clock above the bar names the part of the day — `Morning, Day 42 - 6:40 AM`,
+  `Night, Day 43 - 12:15 AM` — so you know whether it is safe out without doing
+  the arithmetic.
 - Hides itself while the map, your inventory or the menu is open.
 - Pins you have ticked off don't show, and nor do emptied chests if you also run
   Cartur's Map Pins.

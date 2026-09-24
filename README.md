@@ -6,7 +6,10 @@ every 15 degrees) and nearby map pins positioned by real-world bearing.
 
 ## How it works
 
-Pure runtime UI, no Harmony patches:
+Almost all runtime UI. There is exactly one Harmony patch — a postfix on
+`TombStone.UpdateDespawn` (`GraveLootedPatch`), which is how the compass
+learns a grave has been emptied so its marker can stop showing. Everything
+else below reads the game's state without patching it:
 
 - A `Canvas` (screen-space overlay) with a compass bar is built once in
   `Plugin.Awake` and kept alive with `DontDestroyOnLoad`. Layout is baked
@@ -105,15 +108,16 @@ the side that doesn't apply). Not used for the current frame art.
 
 ## Sizing and position
 
-Fixed, and deliberately **not** tied to any other UI. `FrameWidth` (552)
-and `FrameOffsetY` (36 from the top of the screen) are in
-reference-resolution pixels against the `CanvasScaler`'s 1920x1080 basis
-with `ScaleWithScreenSize`, so the compass lands in the same relative spot
-at any resolution. Height follows the frame image's aspect ratio, and the
-clock is glued directly above the frame's top edge. Horizontally it's
-screen-centered.
+Fixed, and deliberately **not** tied to any other UI. `FrameWidth` (657),
+`FrameOffsetX` (0, i.e. screen-centered) and `FrameOffsetY` (54 from the top
+of the screen) are in reference-resolution pixels against the `CanvasScaler`'s
+1920x1080 basis with `ScaleWithScreenSize`, so the compass lands in the same
+relative spot at any resolution. Height follows the frame image's aspect
+ratio, and the clock is glued directly above the frame's top edge.
 
-Those two numbers were measured from a working in-game layout, not guessed.
+The defaults are `FrameWidth` 657, `FrameOffsetX` 0 and `FrameOffsetY` 54.
+Where those particular numbers came from is not recorded anywhere in this
+repo, so nothing here claims a provenance for them.
 
 ### Why it isn't tied to the hotbar
 
@@ -152,28 +156,23 @@ After first run, edit
 - `PinRange` (float, default 300) — meters. Pins further than this don't show.
 - `FieldOfView` (float, default 90) — total degrees of heading visible
   across the window.
-- `FrameWidth` (int, default 552) — frame width in reference-resolution
+- `FrameWidth` (int, default 657) — frame width in reference-resolution
   pixels (1920x1080 basis). Height follows the image's aspect ratio.
-- `FrameOffsetY` (float, default 36) — distance from the top of the screen
+- `FrameOffsetX` (float, default 0) — distance right of screen centre to the
+  middle of the frame, same units. Negative moves it left.
+- `FrameOffsetY` (float, default 54) — distance from the top of the screen
   down to the frame's top edge, same units. The clock rides above the frame.
 - `ShowPinNames` (bool, default true) — show the name and distance of the
   pin nearest the center of the compass, in a label under the frame; off
   shows icons only.
+- `TwelveHourClock` (bool, default true) — clock reads `1:05 PM`; off gives
+  `13:05`.
+- `EditMode` (bool, default false) — draws a box around the compass and lets
+  you drag it to move it, or drag the grip on its right edge to resize it.
+  The compass stays on screen while this is on, even in menus, and where you
+  drop it is written back to the three `Frame*` settings. Turn it off when
+  you're happy with it.
 
 Note that BepInEx keeps existing values in an already-generated config file,
 so bumping a default in code does **not** move an installed copy — edit the
 `.cfg` (or delete it to regenerate) when changing layout defaults.
-
-## Status
-
-Launch-tested in game: the bar renders, turns with the camera, pins appear
-at their real bearing and scale with distance, and the clock tracks in-game
-time. Verify a fresh install by checking
-`%APPDATA%\r2modmanPlus-local\Valheim\profiles\Default\BepInEx\LogOutput.log`
-for "Cartur's Compass and Clock 1.0.0 loaded."
-
-Not yet launch-tested: pin filtering (checked / looted / under 8m), the
-intercardinal letters and minor ticks, distance fade, depth sorting, edge
-softness, the focus label under the frame, HUD/map/inventory hiding, live
-config rebuild, and the day number on the clock. Version stays at 1.0.0
-until those have been seen running.

@@ -820,9 +820,12 @@ namespace CarturCompassAndClock
             go.GetComponent<RectTransform>().anchoredPosition = new Vector2(x, 0f);
         }
 
-        /// Both the stale-marker sweep and the draw loop have to agree on this, or a pin that
-        /// becomes hidden keeps a live marker frozen at its last position. The sweep passes a
-        /// slack above 1 so a pin sitting on either distance edge is not rebuilt every frame.
+        /// The draw loop and the stale-marker sweep call this with different slack deliberately:
+        /// the draw loop passes 1, the hard range the player configured, and the sweep passes
+        /// RangeSlack so a pin parked on an edge stops being drawn without having its marker
+        /// destroyed and rebuilt every frame. What keeps the two honest is that whichever caller
+        /// declines a pin must also leave that pin's marker inactive - a pin the sweep still keeps
+        /// but the draw loop skips will otherwise sit frozen on the bar at its last position.
         private bool ShouldShow(Minimap.PinData pin, Vector3 playerPos, float range, int lootedType, float slack)
         {
             // Not "type None means hidden" - None is a real type, number 8 of 17, and it is what
@@ -1013,8 +1016,21 @@ namespace CarturCompassAndClock
 
             foreach (Minimap.PinData pin in pins)
             {
+                // No slack here: the draw cutoff is the hard PinRange the player configured.
+                // The sweep above is the one that gets RangeSlack, because slack is a release
+                // threshold for the pool, not a second range. That leaves a band - between range
+                // and range*RangeSlack, and the mirror of it at the near edge - where a pin keeps
+                // its pooled marker but must not be drawn, and this loop used to `continue`
+                // straight past it without touching the marker. Nothing else in the frame turns a
+                // marker off: the FOV test and Declutter only reach markers this loop reactivated.
+                // So the marker kept whatever SetActive state it had last frame and hung frozen at
+                // its last position until the pin moved a further 10% out. Hide it on the way past.
                 if (!ShouldShow(pin, playerPos, range, lootedType, 1f))
+                {
+                    if (_markerPool.TryGetValue(pin, out GameObject hidden))
+                        hidden.SetActive(false);
                     continue;
+                }
 
                 Vector3 offset = pin.m_pos - playerPos;
                 float distance = offset.magnitude;
