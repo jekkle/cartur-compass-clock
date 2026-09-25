@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1
+
+- **Markers no longer freeze at the edge of the compass.** The sweep that retires a marker and the
+  draw loop disagreed about how far is too far, so a pin in the gap between them was dropped by the
+  draw without ever being hidden, and its marker stayed on screen.
 ## 1.3.0
 
 - **Home is always on the compass, in gold.** The bed you last slept in shows at any
