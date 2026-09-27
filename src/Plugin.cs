@@ -18,9 +18,17 @@ namespace CarturCompassAndClock
     {
         public const string PluginGuid = "com.jekkle.valheim.carturcompassandclock";
         public const string PluginName = "Cartur's Compass and Clock";
-        public const string PluginVersion = "1.3.1";
+        public const string PluginVersion = "1.4.0";
 
         public static ConfigEntry<float> PinRange;
+
+        /// What the compass does with grave markers.
+        ///
+        /// Three values rather than a switch, because "turn them off" and "keep the one I am
+        /// walking back to" are different answers and a bool can only give one of them.
+        public enum DeathMarkerMode { All, InRange, Off }
+
+        public static ConfigEntry<DeathMarkerMode> DeathMarkers;
         public static ConfigEntry<float> FieldOfView;
         public static ConfigEntry<int> FrameWidth;
         public static ConfigEntry<float> FrameOffsetX;
@@ -276,6 +284,8 @@ namespace CarturCompassAndClock
         private void Awake()
         {
             PinRange = Config.Bind("General", "PinRange", 300f, "Only show map pins within this many meters.");
+            DeathMarkers = Config.Bind("General", "DeathMarkers", DeathMarkerMode.All,
+                "Which grave markers the compass draws. All: every death pin still on your map, at any distance - graves ignore PinRange, so a long-lived character shows every grave it ever left. InRange: graves obey PinRange like everything else, so the one you just made still shows while you walk back to it and the old ones stop crowding the bar. Off: no grave markers at all. This only changes the compass; your map is untouched either way.");
             FieldOfView = Config.Bind("General", "FieldOfView", 90f, "Total degrees of heading visible across the compass window.");
             // Defaults are the layout arrived at by dragging it around in edit mode, rounded to
             // whole reference pixels - the fractions a drag leaves behind are well under a screen
@@ -762,7 +772,16 @@ namespace CarturCompassAndClock
                 active = !Hud.IsUserHidden()                                   // HUD toggled off
                          && Minimap.instance.m_mode != Minimap.MapMode.Large   // big map open
                          && !InventoryGui.IsVisible()
-                         && !Menu.IsVisible();
+                         && !Menu.IsVisible()
+                         // Sleeping after a boss kill plays a full-screen video, and the compass
+                         // was drawn over it. CinematicsManager.m_playing is set true in Play and
+                         // false in Stop, so IsStartedPlaying covers exactly the cutscene.
+                         // Deliberately not IsPlaying(): that one does
+                         // s_instance.m_videoPlayer.isPlaying with no null check on either, so it
+                         // throws whenever no cinematic has ever been set up - which is every
+                         // frame of a normal session. IsStartedPlaying reads a static bool and
+                         // cannot throw.
+                         && !CinematicsManager.IsStartedPlaying();
             _canvasGo.SetActive(active);
             if (!active)
                 return;
@@ -841,6 +860,8 @@ namespace CarturCompassAndClock
                 return false;                       // emptied chest
             if (LootedGraves.Contains(pin))
                 return false;                       // grave already recovered
+            if (IsDeath(pin) && DeathMarkers.Value == DeathMarkerMode.Off)
+                return false;                       // grave markers turned off for the compass
 
             Vector3 offset = pin.m_pos - playerPos;
             float far = range * slack;
@@ -863,9 +884,15 @@ namespace CarturCompassAndClock
         }
 
         /// Home and graves: shown at any distance, never crowded out, drawn over everything else.
+        ///
+        /// Graves are only privileged under DeathMarkerMode.All. That privilege is what made the
+        /// compass fill up with skulls: the game adds one save:true Death pin per death and never
+        /// removes it, LootedGraves only knows about graves emptied in this session, and priority
+        /// means the range test is skipped - so every grave a character ever left was drawn, from
+        /// anywhere on the map, forever. Under InRange they are ordinary pins and PinRange applies.
         private static bool IsPriority(Minimap.PinData pin)
         {
-            return IsHome(pin) || IsDeath(pin);
+            return IsHome(pin) || (IsDeath(pin) && DeathMarkers.Value == DeathMarkerMode.All);
         }
 
         /// -1 when there is nothing to hide. Read through the cached ConfigEntry rather than a

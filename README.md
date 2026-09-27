@@ -176,3 +176,9 @@ After first run, edit
 Note that BepInEx keeps existing values in an already-generated config file,
 so bumping a default in code does **not** move an installed copy — edit the
 `.cfg` (or delete it to regenerate) when changing layout defaults.
+
+---
+
+**[Discord](https://discord.gg/nd5RqpwNkz)** — bug reports, install help, and mod requests.
+Bug reports get their own thread so nothing is lost in a chat scroll, and requests are voted on.
+

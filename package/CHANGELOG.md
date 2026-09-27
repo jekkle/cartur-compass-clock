@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0
+
+- **The compass hides during a cinematic.** Sleeping after a boss kill plays a full-screen
+  video and the compass was drawn straight over it.
+- **Grave markers no longer have to crowd the bar.** New DeathMarkers setting. Graves were
+  exempt from the range test entirely, so every grave a character had ever left was drawn at
+  any distance, and a long-lived character ended up with a bar full of skulls. All keeps that
+  behaviour, InRange makes graves obey PinRange like every other pin - so the one you just made
+  still shows while you walk back to it - and Off draws none. Your map is untouched either way.
+
 ## 1.3.1
 
 - **Markers no longer freeze at the edge of the compass.** The sweep that retires a marker and the
