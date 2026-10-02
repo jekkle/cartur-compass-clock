@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0
+
+- **`General / ShowDay`.** Turn it off to show just the time above the compass, without the time
+  of day and day number.
+
 ## 1.4.1
 
 - **The clock no longer disappears after edit mode.** Any settings change - including the one
