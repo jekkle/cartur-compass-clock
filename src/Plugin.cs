@@ -35,6 +35,7 @@ namespace CarturCompassAndClock
         public static ConfigEntry<float> FrameOffsetY;
         public static ConfigEntry<bool> ShowPinNames;
         public static ConfigEntry<bool> TwelveHourClock;
+        public static ConfigEntry<bool> ShowDay;
         public static ConfigEntry<bool> EditMode;
 
         // Dragging writes to FrameWidth/FrameOffsetX/FrameOffsetY, and a changed setting rebuilds
@@ -295,6 +296,8 @@ namespace CarturCompassAndClock
             FrameOffsetY = Config.Bind("Layout", "FrameOffsetY", 54f, "Distance from the top of the screen down to the frame's top edge, in reference-resolution pixels (1920x1080 basis). The clock sits directly above the frame.");
             TwelveHourClock = Config.Bind("General", "TwelveHourClock", true,
                 "Show the clock as 12-hour with AM/PM (1:05 PM). Off is 24-hour (13:05).");
+            ShowDay = Config.Bind("General", "ShowDay", true,
+                "Show the time of day and the day number with the clock (Morning, Day 12 - 8:30 AM). Off shows the time alone.");
             ShowPinNames = Config.Bind("General", "ShowPinNames", true, "Show the name and distance of the pin nearest the center of the compass, under the frame.");
             EditMode = Config.Bind("Layout", "EditMode", false, "Draw a box around the compass and let you drag it to move it, or drag the grip on its right edge to resize it. The compass stays on screen while this is on, even in menus. Turn it off when you are happy with it.");
 
@@ -806,7 +809,7 @@ namespace CarturCompassAndClock
                     : $"{hour:D2}:{minute:D2}";
 
                 string day = string.Format(words[DayFormat], EnvMan.instance.GetDay());
-                _clockText.text = $"{PhaseName(hour, words)}, {day} - {time}";
+                _clockText.text = ShowDay.Value ? $"{PhaseName(hour, words)}, {day} - {time}" : time;
             }
 
             float heading = cam.transform.eulerAngles.y;
