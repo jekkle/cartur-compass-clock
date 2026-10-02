@@ -322,7 +322,9 @@ namespace CarturCompassAndClock
             // nothing else, so it must not take the compass - or the chainloader - down with it.
             try
             {
-                new Harmony(PluginGuid).PatchAll(typeof(GraveLootedPatch));
+                var harmony = new Harmony(PluginGuid);
+                harmony.PatchAll(typeof(GraveLootedPatch));
+                harmony.PatchAll(typeof(ClearLootedGravesPatch));
             }
             catch (Exception e)
             {
@@ -917,12 +919,23 @@ namespace CarturCompassAndClock
                     // told the type, and being told it wrongly is exactly what broke this. The
                     // indexer hands back the entry whatever it holds, and BoxedValue reads it
                     // without this mod ever naming PinIcon.
+                    // Found by key, not by a fixed section. Map Pins renamed its sections
+                    // (Sections.cs maps "Chest" to "10. Chests"), so the exact ("Chest", key)
+                    // lookup stopped matching and the setting was reported missing. A section
+                    // name holding "Chest" wins if the key ever turns up in more than one.
                     foreach (string key in new[] { "LootedIcon", "LootedIconIndex" })
                     {
-                        var definition = new ConfigDefinition("Chest", key);
-                        if (!info.Instance.Config.ContainsKey(definition))
+                        ConfigDefinition found = null;
+                        foreach (ConfigDefinition definition in info.Instance.Config.Keys)
+                        {
+                            if (definition.Key != key)
+                                continue;
+                            if (found == null || definition.Section.Contains("Chest"))
+                                found = definition;
+                        }
+                        if (found == null)
                             continue;
-                        _mapPinsLootedIcon = info.Instance.Config[definition];
+                        _mapPinsLootedIcon = info.Instance.Config[found];
                         break;
                     }
 
@@ -1244,6 +1257,15 @@ namespace CarturCompassAndClock
         /// inferred from the destroy, and the owner is checked as well - on a server somebody
         /// else's grave can be emptied a few metres from where you died, and that must not clear
         /// your marker.
+        // LootedGraves holds PinData objects, and every world load builds a new Minimap with new
+        // PinData, so the old ones can never match again and only sit in the set. Minimap.Awake
+        // runs once per world load, which is when they go.
+        [HarmonyPatch(typeof(Minimap), "Awake")]
+        private static class ClearLootedGravesPatch
+        {
+            private static void Postfix() => LootedGraves.Clear();
+        }
+
         [HarmonyPatch(typeof(TombStone), "UpdateDespawn")]
         private static class GraveLootedPatch
         {
