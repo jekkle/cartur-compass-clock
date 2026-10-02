@@ -710,7 +710,11 @@ namespace CarturCompassAndClock
 
         private void ClaimClockFont()
         {
-            if (_clockFont != null || _clockText == null || Time.time < _nextFontTry)
+            // Gated on the clock being switched off, not on _clockFont being unset. Rebuild() (any
+            // config change, including the one a drag-end in edit mode writes) makes a brand new
+            // clock built inactive; _clockFont is already cached from the first build, so gating
+            // on it meant the new clock was never switched back on and the time vanished for good.
+            if (_clockText == null || _clockText.gameObject.activeSelf || Time.time < _nextFontTry)
                 return;
 
             _nextFontTry = Time.time + 0.5f;
