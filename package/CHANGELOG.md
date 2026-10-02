@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1
+
+- **The clock no longer disappears after edit mode.** Any settings change - including the one
+  written when you finish dragging the compass - rebuilt it with the clock switched off, and
+  nothing switched it back on until a restart.
+
 ## 1.4.0
 
 - **The compass hides during a cinematic.** Sleeping after a boss kill plays a full-screen
