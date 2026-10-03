@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1
+
+- Finds Map Pins' looted-chest setting again: Map Pins renamed its config sections, and the compass now looks the setting up by key.
+- Looted graves are cleared per world, so a grave looted in one world no longer hides one in another.
+
 ## 1.5.0
 
 - **`General / ShowDay`.** Turn it off to show just the time above the compass, without the time

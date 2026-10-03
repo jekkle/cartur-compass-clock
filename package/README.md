@@ -64,4 +64,6 @@ Bug reports get their own thread so nothing is lost in a chat scroll, and reques
 [Flooring](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Flooring/) ·
 [UI HUD](https://thunderstore.io/c/valheim/p/Cartur/Carturs_UI_HUD/) ·
 [Waste Management](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Waste_Management/) ·
-[Feeding Trough](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Feeding_Trough/)
+[Feeding Trough](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Feeding_Trough/) ·
+[Build Camera](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Build_Camera/) ·
+[Combat Text](https://thunderstore.io/c/valheim/p/Cartur/Carturs_Combat_Text/)
