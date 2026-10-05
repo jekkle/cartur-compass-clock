@@ -5,3 +5,9 @@ tools/*.dll
 dist/
 package/plugins/
 *.zip
+
+# Grok compass renders and assembled candidates. Kept: assemble.py, the sheet and prompt, and
+# compass_4.png - the render the shipped frame is rebuilt from.
+tools/art/*.png
+!tools/art/compass_4.png
+!tools/art/sheet_compass.png

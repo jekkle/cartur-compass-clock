@@ -29,8 +29,10 @@
     <!-- Which frame art ships. The logical name stays the same either way, so swapping the art
          is this one line plus the four window constants in Plugin.cs that go with it.
          compass_frame.rgba      - the original wide Nordic frame (2392x348)
-         compass_frame_slim.rgba - the slim tick-marked bar (2000x138)  <- currently building -->
-    <EmbeddedResource Include="Assets\compass_frame_slim.rgba">
+         compass_frame_slim.rgba - the slim tick-marked bar (2000x138)
+         compass_frame_bronze.rgba - bronze knotwork bar, black window, no ticks (2000x138,
+                                     Grok option 4 rebuilt by tools/art/assemble.py)  <- currently building -->
+    <EmbeddedResource Include="Assets\compass_frame_bronze.rgba">
       <LogicalName>CarturCompassAndClock.compass_frame.rgba</LogicalName>
     </EmbeddedResource>
   </ItemGroup>

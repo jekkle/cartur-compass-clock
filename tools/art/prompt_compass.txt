@@ -1,0 +1,5 @@
+Two parts, one above the other. The BOTTOM part (a carved bar with slots, and a thin bar frame) is only the STYLE reference: aged dark bronze with Celtic knotwork, a raised bronze diamond medallion, weathered metal with fine engraved detail, faint glowing teal runes.
+
+Redraw the TOP part - a long thin compass bar - as a finished, premium AAA game HUD element in that style. Keep EXACTLY its outer shape, length, height and proportions: the same long thin bar, the same pointed diamond end caps at both ends, the same small diamond pointer at the bottom centre, and the same long dark window running along the inside. The window stays a plain flat near-black recess so compass letters can be drawn over it later; small bronze tick notches along its top and bottom rim are fine. Put the craftsmanship into the rim and the end caps: crisp engraved knotwork, bevelled bronze edges, subtle highlights, sharp clean detail like a high-end studio UI.
+
+No ravens, no birds, no animal heads, no faces. No words or letters. Plain flat pure white background around the bar, no shadow. Output only the redrawn top bar; leave the bottom reference out of the result.
