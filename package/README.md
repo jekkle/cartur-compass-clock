@@ -26,6 +26,7 @@ A compass bar across the top of the screen, with your map pins on it at their re
 | `PinRange` | 300 | Metres. Pins further out don't show. |
 | `FieldOfView` | 90 | Degrees of heading visible across the bar. |
 | `ShowPinNames` | true | Name and distance of the centred pin. |
+| `ShowClock` | true | Off hides the clock and leaves the compass. |
 | `TwelveHourClock` | true | `1:05 PM`. Off gives `13:05`. |
 | `FrameWidth` | 657 | Bar width, on a 1920x1080 basis. Scales with your resolution. |
 | `FrameOffsetX` | 0 | Distance right of screen centre. Negative moves it left. |

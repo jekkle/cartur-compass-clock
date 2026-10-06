@@ -165,6 +165,7 @@ After first run, edit
 - `ShowPinNames` (bool, default true) — show the name and distance of the
   pin nearest the center of the compass, in a label under the frame; off
   shows icons only.
+- `ShowClock` (bool, default true) — off hides the clock and leaves the compass.
 - `TwelveHourClock` (bool, default true) — clock reads `1:05 PM`; off gives
   `13:05`.
 - `EditMode` (bool, default false) — draws a box around the compass and lets

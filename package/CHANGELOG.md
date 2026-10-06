@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.2
+
+- **ShowClock setting.** Off hides the clock completely and leaves the compass. Requested on Discord.
+
 ## 1.5.1
 
 - Finds Map Pins' looted-chest setting again: Map Pins renamed its config sections, and the compass now looks the setting up by key.
