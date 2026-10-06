@@ -182,8 +182,13 @@ namespace CarturCompassAndClock
         //
         // These four go with whichever art the csproj embeds. For the original wide frame
         // (compass_frame.rgba, 2392x348) they are 0.1037/0.8946, 0.3103/0.6092, aspect 2392/348.
-        private const float WinXMin = 0.0615f, WinXMax = 0.9335f;
-        private const float WinYMin = 0.2101f, WinYMax = 0.8406f;
+        //
+        // Bronze frame (compass_frame_bronze.rgba, 2026-10-05): the window is the flat black block
+        // assemble.py --black-window fills - rows 35..98 and columns 121..1878 of 2000x138, as it
+        // printed. The slim frame's were 0.0615/0.9335, 0.2101/0.8406. At the default FrameWidth the
+        // window is 21 units tall; the 20-unit pins fit with half a unit to spare.
+        private const float WinXMin = 0.0605f, WinXMax = 0.9395f;
+        private const float WinYMin = 0.2536f, WinYMax = 0.7174f;
         private const float FrameNativeAspect = 2000f / 138f;
 
         // The clock sits directly above the frame's top edge, ClockToFrameGap apart.
