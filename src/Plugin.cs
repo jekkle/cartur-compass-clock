@@ -34,6 +34,7 @@ namespace CarturCompassAndClock
         public static ConfigEntry<float> FrameOffsetX;
         public static ConfigEntry<float> FrameOffsetY;
         public static ConfigEntry<bool> ShowPinNames;
+        public static ConfigEntry<bool> ShowClock;
         public static ConfigEntry<bool> TwelveHourClock;
         public static ConfigEntry<bool> ShowDay;
         public static ConfigEntry<bool> EditMode;
@@ -294,6 +295,8 @@ namespace CarturCompassAndClock
             FrameWidth = Config.Bind("Layout", "FrameWidth", 657, "Frame width, in reference-resolution pixels (1920x1080 basis - scales with screen size). Height follows the frame image's aspect ratio.");
             FrameOffsetX = Config.Bind("Layout", "FrameOffsetX", 0f, "Distance right of screen centre to the middle of the frame, in reference-resolution pixels (1920x1080 basis). Negative moves it left.");
             FrameOffsetY = Config.Bind("Layout", "FrameOffsetY", 54f, "Distance from the top of the screen down to the frame's top edge, in reference-resolution pixels (1920x1080 basis). The clock sits directly above the frame.");
+            ShowClock = Config.Bind("General", "ShowClock", true,
+                "Show the clock above the compass. Off hides it completely; the compass stays.");
             TwelveHourClock = Config.Bind("General", "TwelveHourClock", true,
                 "Show the clock as 12-hour with AM/PM (1:05 PM). Off is 24-hour (13:05).");
             ShowDay = Config.Bind("General", "ShowDay", true,
@@ -719,7 +722,9 @@ namespace CarturCompassAndClock
             // config change, including the one a drag-end in edit mode writes) makes a brand new
             // clock built inactive; _clockFont is already cached from the first build, so gating
             // on it meant the new clock was never switched back on and the time vanished for good.
-            if (_clockText == null || _clockText.gameObject.activeSelf || Time.time < _nextFontTry)
+            // ShowClock off (Discord request): the clock is built inactive and every config change
+            // rebuilds it, so never switching it on here is all hiding it takes.
+            if (!ShowClock.Value || _clockText == null || _clockText.gameObject.activeSelf || Time.time < _nextFontTry)
                 return;
 
             _nextFontTry = Time.time + 0.5f;
