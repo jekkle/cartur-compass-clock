@@ -2,6 +2,7 @@
 
 ## 1.5.2
 
+- **Bronze frame.** The compass bar is redrawn in bronze knotwork to match Cartur's UI.
 - **ShowClock setting.** Off hides the clock completely and leaves the compass. Requested on Discord.
 
 ## 1.5.1
