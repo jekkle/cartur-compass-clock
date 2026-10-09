@@ -18,7 +18,7 @@ namespace CarturCompassAndClock
     {
         public const string PluginGuid = "com.jekkle.valheim.carturcompassandclock";
         public const string PluginName = "Cartur's Compass and Clock";
-        public const string PluginVersion = "1.5.2";
+        public const string PluginVersion = "1.5.3";
 
         public static ConfigEntry<float> PinRange;
 
@@ -37,6 +37,8 @@ namespace CarturCompassAndClock
         public static ConfigEntry<bool> ShowClock;
         public static ConfigEntry<bool> TwelveHourClock;
         public static ConfigEntry<bool> ShowDay;
+        public static ConfigEntry<int> ClockTextSize;
+        public static ConfigEntry<float> Opacity;
         public static ConfigEntry<bool> EditMode;
 
         // Dragging writes to FrameWidth/FrameOffsetX/FrameOffsetY, and a changed setting rebuilds
@@ -306,6 +308,10 @@ namespace CarturCompassAndClock
                 "Show the clock as 12-hour with AM/PM (1:05 PM). Off is 24-hour (13:05).");
             ShowDay = Config.Bind("General", "ShowDay", true,
                 "Show the time of day and the day number with the clock (Morning, Day 12 - 8:30 AM). Off shows the time alone.");
+            ClockTextSize = Config.Bind("General", "ClockTextSize", 26,
+                new ConfigDescription("Size of the clock text. Separate from FrameWidth, so the clock can be bigger or smaller than the compass.", new AcceptableValueRange<int>(10, 60)));
+            Opacity = Config.Bind("Layout", "Opacity", 1f,
+                new ConfigDescription("How solid the compass and clock are. 1 is fully solid, lower lets the game show through.", new AcceptableValueRange<float>(0.1f, 1f)));
             ShowPinNames = Config.Bind("General", "ShowPinNames", true, "Show the name and distance of the pin nearest the center of the compass, under the frame.");
             EditMode = Config.Bind("Layout", "EditMode", false, "Draw a box around the compass and let you drag it to move it, or drag the grip on its right edge to resize it. The compass stays on screen while this is on, even in menus. Turn it off when you are happy with it.");
 
@@ -388,6 +394,7 @@ namespace CarturCompassAndClock
             // scales this off the horizontal axis only, so on an ultrawide the compass balloons.
             scaler.matchWidthOrHeight = 0.5f;
             _canvasGo.AddComponent<GraphicRaycaster>();
+            _canvasGo.AddComponent<CanvasGroup>().alpha = Opacity.Value;
 
             float frameW = FrameWidth.Value;
             float frameH = frameW / FrameNativeAspect;
@@ -493,10 +500,13 @@ namespace CarturCompassAndClock
             clockRt.anchorMin = new Vector2(0.5f, 1f);
             clockRt.anchorMax = new Vector2(0.5f, 1f);
             clockRt.pivot = new Vector2(0.5f, 1f);
-            clockRt.sizeDelta = new Vector2(300f, ClockHeight);
+            // The box grows with the text so a bigger clock still sits on the frame instead of
+            // overflowing down into it. 26 is the size ClockHeight was laid out for.
+            float clockH = ClockHeight * ClockTextSize.Value / 26f;
+            clockRt.sizeDelta = new Vector2(300f, clockH);
             // Glued to the frame's top edge: the frame's top is at -FrameOffsetY, and the clock
             // (top pivot) sits its own height above that.
-            clockRt.anchoredPosition = new Vector2(FrameOffsetX.Value, -FrameOffsetY.Value + ClockToFrameGap + ClockHeight);
+            clockRt.anchoredPosition = new Vector2(FrameOffsetX.Value, -FrameOffsetY.Value + ClockToFrameGap + clockH);
             _movable.Add(clockRt);
             // Built switched off, and switched on by ClaimClockFont once it has a real font.
             // TextMeshProUGUI.Awake calls LoadFontAsset, which - with no font assigned yet -
@@ -510,7 +520,7 @@ namespace CarturCompassAndClock
             // have drawn nothing anyway.
             clockGo.SetActive(false);
             _clockText = clockGo.AddComponent<TextMeshProUGUI>();
-            _clockText.fontSize = 26;
+            _clockText.fontSize = ClockTextSize.Value;
             _clockText.fontStyle = FontStyles.Bold;
             _clockText.alignment = TextAlignmentOptions.Center;
             _clockText.textWrappingMode = TextWrappingModes.NoWrap;

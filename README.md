@@ -168,6 +168,10 @@ After first run, edit
 - `ShowClock` (bool, default true) — off hides the clock and leaves the compass.
 - `TwelveHourClock` (bool, default true) — clock reads `1:05 PM`; off gives
   `13:05`.
+- `ClockTextSize` (int, default 26) — size of the clock text, 10 to 60, separate
+  from the frame size.
+- `Opacity` (float, default 1) — how solid the compass and clock are; lower lets
+  the game show through.
 - `EditMode` (bool, default false) — draws a box around the compass and lets
   you drag it to move it, or drag the grip on its right edge to resize it.
   The compass stays on screen while this is on, even in menus, and where you

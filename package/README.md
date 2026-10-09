@@ -28,6 +28,8 @@ A compass bar across the top of the screen, with your map pins on it at their re
 | `ShowPinNames` | true | Name and distance of the centred pin. |
 | `ShowClock` | true | Off hides the clock and leaves the compass. |
 | `TwelveHourClock` | true | `1:05 PM`. Off gives `13:05`. |
+| `ClockTextSize` | 26 | Size of the clock text, separate from the bar's size. 10 to 60. |
+| `Opacity` | 1 | How solid the compass and clock are. Lower lets the game show through. |
 | `FrameWidth` | 657 | Bar width, on a 1920x1080 basis. Scales with your resolution. |
 | `FrameOffsetX` | 0 | Distance right of screen centre. Negative moves it left. |
 | `FrameOffsetY` | 54 | Gap from the top of the screen down to the bar. |

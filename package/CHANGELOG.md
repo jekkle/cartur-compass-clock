@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.3
+
+- **ClockTextSize setting.** Make the clock text bigger or smaller without touching the bar.
+  The clock still sits on top of the frame at any size. Requested on Nexus.
+- **Opacity setting.** Fade the compass and clock so they stand out less. Requested on Nexus.
+
 ## 1.5.2
 
 - **Bronze frame.** The compass bar is redrawn in bronze knotwork to match Cartur's UI.
