@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.4
+
+- The README is rewritten: a fuller description of what the mod does, every setting and default checked against the code, and image captions that match the pictures. No code changes.
+
 ## 1.5.3
 
 - **ClockTextSize setting.** Make the clock text bigger or smaller without touching the bar.
