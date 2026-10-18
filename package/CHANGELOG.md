@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.6
+
+- **`Style`: a RuneUI look.** Rune swaps the bronze frame for a flat dark panel with a thin black border, matching Cartur's RuneUI. Auto (the default) uses it when RuneUI is installed and keeps the bronze frame otherwise. Bronze or Rune forces one.
+
 ## 1.5.5
 
 - **`ClockFormat`.** Write your own clock text with tokens such as `{day}`, `{time24}`, `{time12}`, `{hour}`, `{minute}`, `{ampm}`, `{phase}`. For example `{day} | {time24}` gives `Day 12 | 13:05`. Empty keeps the old text. Requested on Discord.

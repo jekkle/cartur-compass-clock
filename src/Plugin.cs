@@ -18,7 +18,7 @@ namespace CarturCompassAndClock
     {
         public const string PluginGuid = "com.jekkle.valheim.carturcompassandclock";
         public const string PluginName = "Cartur's Compass and Clock";
-        public const string PluginVersion = "1.5.5";
+        public const string PluginVersion = "1.5.6";
 
         public static ConfigEntry<float> PinRange;
 
@@ -40,6 +40,7 @@ namespace CarturCompassAndClock
         public static ConfigEntry<string> ClockFormat;
         public static ConfigEntry<int> ClockTextSize;
         public static ConfigEntry<float> Opacity;
+        public static ConfigEntry<string> Style;
         public static ConfigEntry<bool> EditMode;
 
         // Dragging writes to FrameWidth/FrameOffsetX/FrameOffsetY, and a changed setting rebuilds
@@ -315,6 +316,9 @@ namespace CarturCompassAndClock
                 new ConfigDescription("Size of the clock text. Separate from FrameWidth, so the clock can be bigger or smaller than the compass.", new AcceptableValueRange<int>(10, 60)));
             Opacity = Config.Bind("Layout", "Opacity", 1f,
                 new ConfigDescription("How solid the compass and clock are. 1 is fully solid, lower lets the game show through.", new AcceptableValueRange<float>(0.1f, 1f)));
+            Style = Config.Bind("Layout", "Style", "Auto", new ConfigDescription(
+                "Bronze is the bronze frame. Rune is a flat dark panel with a thin black border, matching Cartur's RuneUI. Auto picks Rune when Cartur's RuneUI is installed, Bronze otherwise.",
+                new AcceptableValueList<string>("Auto", "Bronze", "Rune")));
             ShowPinNames = Config.Bind("General", "ShowPinNames", true, "Show the name and distance of the pin nearest the center of the compass, under the frame.");
             EditMode = Config.Bind("Layout", "EditMode", false, "Draw a box around the compass and let you drag it to move it, or drag the grip on its right edge to resize it. The compass stays on screen while this is on, even in menus. Turn it off when you are happy with it.");
 
@@ -429,9 +433,30 @@ namespace CarturCompassAndClock
             frameRt.offsetMin = Vector2.zero;
             frameRt.offsetMax = Vector2.zero;
             Image frameImg = frameGo.AddComponent<Image>();
-            frameImg.sprite = LoadFrameSprite();
             frameImg.type = Image.Type.Simple;
             frameImg.raycastTarget = false;
+            if (Rune)
+            {
+                // RuneUI's panel (cartur-rune-ui Theme.cs, theme "RuneUI"): a 1 px black border
+                // (Theme.Border, BorderPixels 1 with Thin Borders on) around the faded backdrop
+                // 0.054 grey at 0.75. Same footprint as the bronze art, so the window fractions, the
+                // clock above and the label below all stay where they are.
+                frameImg.color = Color.black;
+                GameObject fillGo = new GameObject("RuneFill");
+                fillGo.transform.SetParent(frameGo.transform, false);
+                RectTransform fillRt = fillGo.AddComponent<RectTransform>();
+                fillRt.anchorMin = Vector2.zero;
+                fillRt.anchorMax = Vector2.one;
+                fillRt.offsetMin = new Vector2(1f, 1f);
+                fillRt.offsetMax = new Vector2(-1f, -1f);
+                Image fill = fillGo.AddComponent<Image>();
+                fill.color = new Color(0.054f, 0.054f, 0.054f, 0.75f);
+                fill.raycastTarget = false;
+            }
+            else
+            {
+                frameImg.sprite = LoadFrameSprite();
+            }
 
             // Content sits strictly inside the frame's window - measured fractions of the full
             // frame image - so ticks and pins land on the frame's own black backdrop.
@@ -746,11 +771,15 @@ namespace CarturCompassAndClock
                 return;
 
             _nextFontTry = Time.time + 0.5f;
-            TMP_FontAsset font = SerifFont();
+            TMP_FontAsset rune = Rune ? RuneFont() : null;
+            TMP_FontAsset font = rune ?? SerifFont();
             if (font == null)
                 return;
 
             _clockText.font = font;
+            // RuneUI's face is already the bold cut; bold on top of it smears.
+            if (rune != null)
+                _clockText.fontStyle = FontStyles.Normal;
             _clockText.gameObject.SetActive(true);
         }
 
@@ -764,6 +793,22 @@ namespace CarturCompassAndClock
             }
 
             return _phrases;
+        }
+
+        private const string RuneGuid = "com.jekkle.valheim.carturruneui";
+
+        private static bool Rune =>
+            Style.Value == "Rune" || (Style.Value == "Auto" && Chainloader.PluginInfos.ContainsKey(RuneGuid));
+
+        // RuneUI's own font (cartur-rune-ui Fonts.cs: Fonts.Bold, PT Sans Narrow Bold built from the
+        // .ttf beside its DLL, or the face picked in its options). Read through its own assembly so a
+        // missing RuneUI logs nothing; null falls back to the game's serif.
+        private static TMP_FontAsset RuneFont()
+        {
+            if (!Chainloader.PluginInfos.TryGetValue(RuneGuid, out PluginInfo info) || info?.Instance == null)
+                return null;
+            System.Type fonts = info.Instance.GetType().Assembly.GetType("CarturRuneUI.Fonts");
+            return fonts?.GetProperty("Bold", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)?.GetValue(null, null) as TMP_FontAsset;
         }
 
         private TMP_FontAsset SerifFont()
