@@ -31,6 +31,7 @@ Config file: `BepInEx/config/com.jekkle.valheim.carturcompassandclock.cfg`. Chan
 | `ShowClock` | true | Off hides the clock and leaves the compass. |
 | `ShowDay` | true | Show the time of day and day number with the clock. Off shows the time alone. |
 | `TwelveHourClock` | true | `1:05 PM`. Off gives `13:05`. |
+| `ClockFormat` | empty | Write your own clock text, for example `{day} \| {time24}` gives `Day 12 \| 13:05`. Tokens: `{phase}` (Morning, Afternoon, Night), `{day}` (Day 12), `{daynum}` (12), `{time}` (follows `TwelveHourClock`), `{time12}` (1:05 PM), `{time24}` (13:05), `{hour}` (13), `{hour12}` (1), `{minute}` (05), `{ampm}` (PM). Empty keeps the text above. Applies straight away. |
 | `ClockTextSize` | 26 | Size of the clock text, separate from the bar's size. 10 to 60. |
 | `Opacity` | 1 | How solid the compass and clock are, 0.1 to 1. Lower lets the game show through. |
 | `FrameWidth` | 657 | Bar width, on a 1920x1080 basis. Scales with your resolution. |

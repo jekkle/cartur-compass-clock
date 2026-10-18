@@ -18,7 +18,7 @@ namespace CarturCompassAndClock
     {
         public const string PluginGuid = "com.jekkle.valheim.carturcompassandclock";
         public const string PluginName = "Cartur's Compass and Clock";
-        public const string PluginVersion = "1.5.4";
+        public const string PluginVersion = "1.5.5";
 
         public static ConfigEntry<float> PinRange;
 
@@ -37,6 +37,7 @@ namespace CarturCompassAndClock
         public static ConfigEntry<bool> ShowClock;
         public static ConfigEntry<bool> TwelveHourClock;
         public static ConfigEntry<bool> ShowDay;
+        public static ConfigEntry<string> ClockFormat;
         public static ConfigEntry<int> ClockTextSize;
         public static ConfigEntry<float> Opacity;
         public static ConfigEntry<bool> EditMode;
@@ -308,6 +309,8 @@ namespace CarturCompassAndClock
                 "Show the clock as 12-hour with AM/PM (1:05 PM). Off is 24-hour (13:05).");
             ShowDay = Config.Bind("General", "ShowDay", true,
                 "Show the time of day and the day number with the clock (Morning, Day 12 - 8:30 AM). Off shows the time alone.");
+            ClockFormat = Config.Bind("General", "ClockFormat", "",
+                "Custom clock text (Discord request). Empty keeps the built-in text, which TwelveHourClock and ShowDay control. Tokens: {phase} Morning/Afternoon/Night, {day} Day 12, {daynum} 12, {time} as TwelveHourClock says, {time12} 1:05 PM, {time24} 13:05, {hour} 13, {hour12} 1, {minute} 05, {ampm} PM. Words follow the game language. Example: {day} | {time24}. Unknown tokens are shown as typed.");
             ClockTextSize = Config.Bind("General", "ClockTextSize", 26,
                 new ConfigDescription("Size of the clock text. Separate from FrameWidth, so the clock can be bigger or smaller than the compass.", new AcceptableValueRange<int>(10, 60)));
             Opacity = Config.Bind("Layout", "Opacity", 1f,
@@ -831,7 +834,18 @@ namespace CarturCompassAndClock
                     : $"{hour:D2}:{minute:D2}";
 
                 string day = string.Format(words[DayFormat], EnvMan.instance.GetDay());
-                _clockText.text = ShowDay.Value ? $"{PhaseName(hour, words)}, {day} - {time}" : time;
+                string ampm = hour < 12 ? words[Am] : words[Pm];
+                string time12 = $"{(hour % 12 == 0 ? 12 : hour % 12)}:{minute:D2} {ampm}";
+                string time24 = $"{hour:D2}:{minute:D2}";
+                string phase = PhaseName(hour, words);
+                _clockText.text = string.IsNullOrEmpty(ClockFormat.Value)
+                    ? (ShowDay.Value ? $"{phase}, {day} - {time}" : time)
+                    : ClockFormat.Value
+                        .Replace("{phase}", phase).Replace("{day}", day)
+                        .Replace("{daynum}", EnvMan.instance.GetDay().ToString())
+                        .Replace("{time}", time).Replace("{time12}", time12).Replace("{time24}", time24)
+                        .Replace("{hour}", hour.ToString("D2")).Replace("{hour12}", (hour % 12 == 0 ? 12 : hour % 12).ToString())
+                        .Replace("{minute}", minute.ToString("D2")).Replace("{ampm}", ampm);
             }
 
             float heading = cam.transform.eulerAngles.y;

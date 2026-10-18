@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.5
+
+- **`ClockFormat`.** Write your own clock text with tokens such as `{day}`, `{time24}`, `{time12}`, `{hour}`, `{minute}`, `{ampm}`, `{phase}`. For example `{day} | {time24}` gives `Day 12 | 13:05`. Empty keeps the old text. Requested on Discord.
+
 ## 1.5.4
 
 - The README is rewritten: a fuller description of what the mod does, every setting and default checked against the code, and image captions that match the pictures. No code changes.

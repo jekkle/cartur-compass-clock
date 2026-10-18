@@ -1,58 +1,80 @@
-[size=4][b]A compass bar across the top of the screen, with your map pins on it at their real bearing.[/b][/size]
+A compass bar across the top of the screen with your map pins on it at their real bearing, and a clock above it that names the time of day.
+
+[img]https://raw.githubusercontent.com/jekkle/cartur-compass-clock/master/docs/images/compass-hud.png[/img]
+
+[img]https://raw.githubusercontent.com/jekkle/cartur-compass-clock/master/docs/images/compass-ingame.png[/img]
+
+[size=5][b]What it does[/b][/size]
+
+The bar shows the cardinal and intercardinal letters and a tick every 15 degrees, across a field of view of 90 degrees by default. Pins are read straight from the in-game map and drawn with the same icons, so a pin at your two o'clock appears at your two o'clock. A pin takes the colour it has on the map. If you run Cartur's Map Pins, its per-pin colours and ore tints carry over, and emptied chests are left off the compass. Without that mod you get the vanilla pins in white. Pins further away than PinRange (300 metres) are not drawn, and neither are pins you have ticked off on the map or pins you are standing within 8 metres of.
+
+Icons grow and get more opaque as you close on a pin. The pin nearest the centre of the bar, within about 12 degrees, shows its name and distance under the frame, one at a time. Where several pins would pile up on the same spot, the nearest one wins and the ones behind it are skipped for that frame.
+
+Your home bed and your graves are treated differently. They ignore PinRange, so they show at any distance, they are drawn larger in a fixed colour (gold for home, red for graves), and they sit on top of the other markers. A grave marker goes away once you have emptied the grave. The graves rule is per session, so a grave emptied before the mod was installed or in an earlier session keeps its marker until you clear it on the map. DeathMarkers can limit graves to the pin range or hide them.
+
+The clock sits above the bar and reads like Morning, Day 42 - 6:40 AM or Night, Day 43 - 12:15 AM. The part of the day is one of Morning, Afternoon or Night, so you can tell whether it is safe out without doing the arithmetic. These words are translated for English, German, Russian, French, Spanish, Italian, Polish, Brazilian Portuguese, Chinese, Japanese and Korean. Any other language shows English.
+
+The whole thing hides itself while the large map, your inventory or the menu is open, when you toggle the HUD off, and during the cutscene after a boss kill.
+
+[size=5][b]Settings[/b][/size]
+
+Config file: BepInEx/config/com.jekkle.valheim.carturcompassandclock.cfg. Changes apply live.
 
 [list]
-[*]A pin at your two o'clock appears at your two o'clock. Read straight from the in-game map, with the same icons.[/*]
-[*]Icons grow and brighten as you close on them.[/*]
-[*]The pin nearest the centre shows its name and distance. One at a time, not a wall of overlapping text.[/*]
-[*]A clock above the bar names the part of the day - Dawn 42 - 6:40 AM, Night 43 - 12:15 AM - so you know whether it is safe out without doing the arithmetic.[/*]
-[*]Hides itself while the map, your inventory or the game menu is open.[/*]
-[*]Pins you have ticked off do not show, and nor do emptied chests if you also run Cartur's Map Pins.[/*]
-[/list]
-
-[size=4][b]Config[/b][/size]
-
-BepInEx/config/com.jekkle.valheim.carturcompassandclock.cfg, written on first run. Changes apply live - no restart needed.
-
-[list]
-[*][b]PinRange[/b] (300) - metres. Pins further out do not show.[/*]
-[*][b]FieldOfView[/b] (90) - degrees of heading visible across the bar.[/*]
-[*][b]ShowPinNames[/b] (true) - name and distance of the centred pin.[/*]
+[*][b]PinRange[/b] (300) - Metres. Pins further out don't show.[/*]
+[*][b]DeathMarkers[/b] (All) - Grave markers: All shows every grave on your map at any distance, InRange applies PinRange, Off hides them. Your map is not changed.[/*]
+[*][b]FieldOfView[/b] (90) - Degrees of heading visible across the bar.[/*]
+[*][b]ShowPinNames[/b] (true) - Name and distance of the centred pin.[/*]
+[*][b]ShowClock[/b] (true) - Off hides the clock and leaves the compass.[/*]
+[*][b]ShowDay[/b] (true) - Show the time of day and day number with the clock. Off shows the time alone.[/*]
 [*][b]TwelveHourClock[/b] (true) - 1:05 PM. Off gives 13:05.[/*]
-[*][b]FrameWidth[/b] (657) - bar width, on a 1920x1080 basis. Scales with your resolution.[/*]
-[*][b]FrameOffsetX[/b] (0) - distance right of screen centre. Negative moves it left.[/*]
-[*][b]FrameOffsetY[/b] (54) - gap from the top of the screen down to the bar.[/*]
-[*][b]EditMode[/b] (false) - drag the compass around the screen. See below.[/*]
+[*][b]ClockTextSize[/b] (26) - Size of the clock text, separate from the bar's size. 10 to 60.[/*]
+[*][b]Opacity[/b] (1) - How solid the compass and clock are, 0.1 to 1. Lower lets the game show through.[/*]
+[*][b]FrameWidth[/b] (657) - Bar width, on a 1920x1080 basis. Scales with your resolution.[/*]
+[*][b]FrameOffsetX[/b] (0) - Distance right of screen centre. Negative moves it left.[/*]
+[*][b]FrameOffsetY[/b] (54) - Gap from the top of the screen down to the bar.[/*]
+[*][b]EditMode[/b] (false) - Drag the compass around the screen, see below.[/*]
 [/list]
 
-[size=4][b]Moving and resizing it[/b][/size]
+[size=5][b]Moving and resizing it[/b][/size]
 
 [list=1]
 [*]Turn on EditMode.[/*]
-[*][b]Open your inventory[/b], so you have a free cursor - without a menu open the mouse is driving the camera.[/*]
+[*]Open your inventory, so you have a free cursor.[/*]
 [*]Drag the box to move it. Drag the grip on its right edge to resize it.[/*]
 [*]Turn EditMode back off.[/*]
 [/list]
 
-Where you drop it is written straight back to FrameWidth, FrameOffsetX and FrameOffsetY, so it survives restarts and you can still fine-tune the numbers by hand.
+Where you drop it is written back to the three layout settings, so it survives restarts and you can still fine-tune the numbers by hand.
 
-[size=4][b]Compatibility[/b][/size]
+[size=5][b]Compatibility[/b][/size]
 
-No Harmony patches - the compass is its own UI canvas that reads the map's pin list. It does not touch the map, the HUD, or anyone else's UI.
+It reads the game's own pin list, so it works with vanilla pins on its own. Cartur's Map Pins is optional. With it installed, the compass shows that mod's pins in their map colours and drops chests it has marked as looted. The compass looks the mod up at runtime, and without it nothing breaks.
 
-Single-player and multiplayer, client-side only. The server does not need it, and other players do not need it.
+The mod patches one game method, TombStone.UpdateDespawn, to learn when a grave is emptied. If that patch fails, the compass still works and recovered graves keep their marker.
 
-[size=4][b]Installation[/b][/size]
+Client-side. The server does not need it and neither do the people you play with.
 
-Requires BepInEx. Unpack into your Valheim folder so the DLL lands in BepInEx/plugins.
+[size=5][b]Install[/b][/size]
 
-[size=4][b]More from Cartur[/b][/size]
+Use a mod manager (r2modman, Thunderstore or Gale) and it pulls in BepInEx for you. To install by hand, drop CarturCompassAndClock.dll into BepInEx/plugins.
 
-[url=https://www.nexusmods.com/valheim/mods/3679]HD Blood[/url] - higher resolution ground blood and a real burst on every hit.
+[size=5][b]Discord[/b][/size]
+[url=https://discord.gg/nd5RqpwNkz]Cartur's Mods Discord[/url] - bug reports, install help, and mod requests. Bug reports get their own thread so nothing is lost, and requests are voted on.
+
+[size=5][b]More from Cartur[/b][/size]
+
+[url=https://www.nexusmods.com/valheim/mods/3679]HD Blood[/url] - higher resolution ground blood, and a real burst of blood on every hit and kill.
 [url=https://www.nexusmods.com/valheim/mods/3681]Map Pins[/url] - pins the world onto your map as you explore it.
 [url=https://www.nexusmods.com/valheim/mods/3685]Safe Stamina[/url] - stamina costs nothing while no enemy is near.
 [url=https://www.nexusmods.com/valheim/mods/3728]Follow Command[/url] - every tamed animal takes the follow command.
 [url=https://www.nexusmods.com/valheim/mods/3760]Flooring[/url] - floors keep the rain off, and fires sit on them.
 [url=https://www.nexusmods.com/valheim/mods/3779]UI - HUD[/url] - a hand-drawn bronze HUD you can arrange in game.
 [url=https://www.nexusmods.com/valheim/mods/3888]Waste Management[/url] - a trash can and a sort button in the inventory.
+[url=https://www.nexusmods.com/valheim/mods/4010]Feeding Trough[/url] - a trough your animals eat out of.
+[url=https://www.nexusmods.com/valheim/mods/4088]Combat Text[/url] - bigger damage numbers and a fast crit pop.
+[url=https://www.nexusmods.com/valheim/mods/4389]Farming[/url] - faster crops, bigger harvests, and whole fields planted at once.
+[url=https://www.nexusmods.com/valheim/mods/4390]Mining[/url] - harder pickaxe hits, more ore, and deposits that shatter.
+[url=https://www.nexusmods.com/valheim/mods/4391]Sailing[/url] - a Sailing skill: faster ships, tougher hulls, a wider map reveal.
 
 Free, and always will be - if it improved your game you can [url=https://www.patreon.com/c/cartur]tip me on Patreon[/url].

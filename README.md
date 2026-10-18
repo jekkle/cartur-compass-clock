@@ -168,6 +168,14 @@ After first run, edit
 - `ShowClock` (bool, default true) — off hides the clock and leaves the compass.
 - `TwelveHourClock` (bool, default true) — clock reads `1:05 PM`; off gives
   `13:05`.
+- `ShowDay` (bool, default true) — clock reads `Morning, Day 12 - 8:30 AM`;
+  off shows the time alone.
+- `ClockFormat` (string, default empty) — custom clock text. Empty keeps the
+  built-in text above. Tokens: `{phase}` Morning/Afternoon/Night, `{day}`
+  Day 12, `{daynum}` 12, `{time}` (12 or 24-hour per `TwelveHourClock`),
+  `{time12}` 1:05 PM, `{time24}` 13:05, `{hour}` 13, `{hour12}` 1, `{minute}` 05,
+  `{ampm}` PM. Words follow the game language. Unknown tokens show as typed.
+  Example: `{day} | {time24}` gives `Day 12 | 13:05`. Updates live.
 - `ClockTextSize` (int, default 26) — size of the clock text, 10 to 60, separate
   from the frame size.
 - `Opacity` (float, default 1) — how solid the compass and clock are; lower lets
